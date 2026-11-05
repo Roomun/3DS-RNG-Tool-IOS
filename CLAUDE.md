@@ -25,7 +25,7 @@ History of attempts: v43 animated close via monkey-patched `classList.remove/add
 Ideas to try next: test with real WebKit (Playwright webkit or a device) and `--webkit` touch; check whether another handler re-opens it (search for `fabm`, `toolFab`, `openP`, haptics capture click listener, `lab.click()` hidden switch-input haptics hack, swipe touch handlers); check iOS ghost click / double dispatch; check whether the service worker serves a stale index.html; add on-screen debug log of click events with timestamps; simplest fallback: make the dropdown a plain show/hide with no animation to rule out animation/timing causes.
 
 ## Offline package
-offline/ holds manifest.webmanifest, sw.js (cache name `rng-vNN`, bump each release), icons. Build: copy index.html, add `<link rel="manifest" href="manifest.webmanifest">` in head and a service-worker registration script before </body> (skipped on file://), zip with the offline files, host over https (Netlify Drop / GitHub Pages), then Add to Home Screen. Camera scan (needs the Claude artifact `sample` capability) does not work outside the artifact.
+offline/ holds manifest.webmanifest, sw.js (cache name `rng-vNN`, bump each release), icons. Build: `tools/build_offline.sh` → `dist/rng-vNN-offline.zip` (adds the manifest link and a service-worker registration, skipped on file://, to a copy of index.html and zips it with the offline files). Host over https (Netlify Drop / GitHub Pages), then Add to Home Screen. Camera scan (needs the Claude artifact `sample` capability) does not work outside the artifact.
 
 ## Roadmap (unrequested)
 Gen 7 extra trigger variants (unknown which), Minior forme test, check against real 3DS, more sprites for categories with few species (fishing, special encounters).
