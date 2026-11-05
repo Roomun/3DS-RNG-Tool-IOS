@@ -5,7 +5,7 @@ Single-file HTML app (index.html, ~730 KB, vanilla JS, no build step, no externa
 ## Layout of index.html
 Three main script blocks plus small trailing scripts:
 - c0: engines (TinyMT, MT, SFMT), Gen 6/7 generators and searches, UI state, `widen()` async search with progress/cancel, `run()`.
-- c1: floating menu panel (`openP`, `#pnl`), Final Screen, camera scan (`sample` capability, artifact only).
+- c1: floating menu panel (`openP`, `#pnl`), Final Screen, camera scan (Claude `sample` capability in the artifact; Live Text / paste fallback offline).
 - c2: extras (help, settings, recent, targets, compare), summary bar, steps + target cards (`renderCards`, POOLS of sprite keys), layout setting.
 - Trailing scripts: header toggle, haptics (`rng-haptics-v1`), swipe between steps, pop/sheet animations, menu dropdown controller (`#fabm` / `#toolFab`, `window.fabOpen/fabClose`).
 Embedded assets: pixel font (base64 woff), sprites `PS`, `PSS`, `PS6`, `PSS6` (base64 PNG), apple-touch-icon.
@@ -25,7 +25,7 @@ History of attempts: v43 animated close via monkey-patched `classList.remove/add
 Ideas to try next: test with real WebKit (Playwright webkit or a device) and `--webkit` touch; check whether another handler re-opens it (search for `fabm`, `toolFab`, `openP`, haptics capture click listener, `lab.click()` hidden switch-input haptics hack, swipe touch handlers); check iOS ghost click / double dispatch; check whether the service worker serves a stale index.html; add on-screen debug log of click events with timestamps; simplest fallback: make the dropdown a plain show/hide with no animation to rule out animation/timing causes.
 
 ## Offline package
-offline/ holds manifest.webmanifest, sw.js (cache name `rng-vNN`, bump each release), icons. Build: `tools/build_offline.sh` → `dist/rng-vNN-offline.zip` (adds the manifest link and a service-worker registration, skipped on file://, to a copy of index.html and zips it with the offline files). Host over https (Netlify Drop / GitHub Pages), then Add to Home Screen. Camera scan (needs the Claude artifact `sample` capability) does not work outside the artifact.
+offline/ holds manifest.webmanifest, sw.js (cache name `rng-vNN`, bump each release), icons. Build: `tools/build_offline.sh` → `dist/rng-vNN-offline.zip` (adds the manifest link and a service-worker registration, skipped on file://, to a copy of index.html and zips it with the offline files). Host over https (Netlify Drop / GitHub Pages), then Add to Home Screen. Camera scan: in the artifact it uses Claude (`sample` capability) to read a photo; without `window.claude` (offline copy) `showScanOffline()` shows the same check-and-apply form for iPhone Live Text ("Scan Text" on a field) plus a paste box parsed by `scanParse()` (v48). Tests: `node tools/smoke28.js`.
 
 ## Roadmap (unrequested)
 Gen 7 extra trigger variants (unknown which), Minior forme test, check against real 3DS, more sprites for categories with few species (fishing, special encounters).

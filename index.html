@@ -2291,7 +2291,7 @@ let scanBlob = null;
 async function showScan() {
   const sm = await (window.claude && window.claude.use ? window.claude.use('sample') : Promise.resolve(null)).catch(() => null);
   const caps = sm ? await sm.limits().catch(() => null) : null;
-  if (!sm || !caps?.images) return openP('<h2>Scan 3DS screen</h2><p>Scanning needs Claude to read the photo, and that only works when the page is opened from its claude.ai link, not from a downloaded copy. Type the seed and frame in by hand, or open the claude.ai link.</p>');
+  if (!sm || !caps?.images) return showScanOffline();
   openP('<h2>Scan 3DS screen</h2><p class="d" style="margin:0 0 8px;font-size:.85rem">Take a photo of the screen showing your initial seed and frames (MT Advances in Gen 6). Hold the camera straight on and avoid glare.</p><input id="scIn" type="file" accept="image/*" capture="environment" style="display:none"><div class="row2"><button id="scCam" class="go" type="button">Take photo</button><button id="scPick" type="button">Choose photo</button></div><div id="scBox"></div>');
   const inp = $('scIn');
   $('scCam').onclick = () => { inp.setAttribute('capture', 'environment'); inp.click(); };
@@ -2310,20 +2310,62 @@ async function scanRead(sm, f) {
     $('scS').textContent = m;
   }
 }
+// ---- Offline scan: iPhone Live Text ("Scan Text") or pasted text, read on the phone itself ----
+const scanFixOcr = t => String(t || '').replace(/[Oo]/g, '0').replace(/[Il|]/g, '1');
+function scanHex(t) { // the longest 1-8 digit hex word, ignoring labels and 0x
+  const w = String(t || '').toUpperCase().replace(/0X/g, ' ').split(/[^0-9A-Z]+/).map(scanFixOcr).filter(x => /^[0-9A-F]{1,8}$/.test(x));
+  if (!w.length) return String(t || '').trim() ? null : '';
+  return w.sort((a, b) => b.length - a.length)[0];
+}
+function scanNum(t) { const m = scanFixOcr(String(t || '').replace(/[,.\s](?=\d{3}\b)/g, '')).match(/\d+/); return m ? m[0] : (String(t || '').trim() ? null : ''); }
+function scanParse(txt) { // pick labelled values out of text copied from a photo
+  const t = String(txt || '').replace(/\r/g, ''), r = {}, H = '([0-9A-Fa-fOo]{1,8})', N = '([0-9OoIl][0-9OoIl,. ]*)';
+  const get = (re, f) => { const m = t.match(re); return m ? f(m[1]) : null; };
+  const eg = t.toUpperCase().match(/\b[0-9A-F]{8}\b[\s,]+\b[0-9A-F]{8}\b[\s,]+\b[0-9A-F]{8}\b[\s,]+\b[0-9A-F]{8}\b/);
+  if (eg) r.eggSeed = eg[0].split(/[\s,]+/).join(',');
+  r.initSeed = get(new RegExp('init(?:ial)?\\s*seed\\s*[:=]?\\s*(?:0x)?' + H + '\\b', 'i'), scanHex);
+  if (r.initSeed == null) for (const m of t.matchAll(new RegExp('seed\\s*[:=]?\\s*(?:0x)?' + H + '\\b', 'gi'))) { if (!/egg\s*$/i.test(t.slice(Math.max(0, m.index - 5), m.index))) { r.initSeed = scanHex(m[1]); break; } }
+  r.frame = get(new RegExp('(?:mt\\s*advances?|advances?|frames?|current\\s*frame)\\s*[:=]?\\s*' + N, 'i'), scanNum);
+  r.tid = get(new RegExp('\\b(?:tid|trainer\\s*id|id\\s*no\\.?)\\s*[:=]?\\s*' + N, 'i'), scanNum);
+  r.sid = get(new RegExp('\\b(?:sid|secret\\s*id)\\s*[:=]?\\s*' + N, 'i'), scanNum);
+  r.tsv = get(new RegExp('\\b(?:tsv)\\s*[:=]?\\s*' + N, 'i'), scanNum);
+  if (!r.initSeed && !r.eggSeed) { const w = t.toUpperCase().match(/\b[0-9A-F]{8}\b/g); if (w && w.length === 1) r.initSeed = w[0]; }
+  return r;
+}
+function showScanOffline() {
+  openP('<h2>Scan 3DS screen</h2><p class="d" style="margin:0 0 8px;font-size:.85rem">This copy reads the screen with your iPhone’s own Live Text, so it works offline. Tap a field below, then tap <b>Scan Text</b> (the camera-and-text icon above the keyboard, or hold the field and pick Scan Text) and point it at the number on the 3DS. Tap Insert when it is right.</p>' +
+    '<details><summary>Or paste text from a photo</summary><p class="d" style="font-size:.8rem;margin:4px 0">In Photos, hold on the text in your picture of the 3DS screen, choose Select All and Copy, then paste it here. The seed, frame, TID, SID and TSV are picked out for you.</p><textarea id="scTxt" rows="4" autocomplete="off" spellcheck="false" placeholder="Paste here"></textarea><p id="scTxtS" class="d" style="font-size:.8rem;margin:4px 0"></p></details>' +
+    '<div id="scBox"></div>');
+  showScanResult({}, null);
+  const ta = $('scTxt'), st = $('scTxtS');
+  ta.oninput = () => {
+    const r = scanParse(ta.value), keep = id => $(id) ? $(id).value : '';
+    const cur = { initSeed: keep('scSeed'), frame: keep('scFrame'), tid: keep('scTid'), sid: keep('scSid'), tsv: keep('scTsv'), eggSeed: keep('scEgg') };
+    const found = Object.keys(r).filter(k => r[k] != null && r[k] !== '');
+    found.forEach(k => cur[k] = r[k]);
+    showScanResult(cur, null);
+    st.textContent = ta.value.trim() ? (found.length ? 'Found: ' + found.map(k => ({ initSeed: 'seed', eggSeed: 'egg seed', frame: 'frame', tid: 'TID', sid: 'SID', tsv: 'TSV' })[k]).join(', ') + '. Check them below.' : 'No labelled values found. Type them in below.') : '';
+  };
+}
 function showScanResult(r, url) {
   const v = x => (x === null || x === undefined) ? '' : String(x).replace(/^0x/i, '').trim();
-  const box = $('scBox');
-  box.innerHTML = '<img alt="Your photo" src="' + url + '"><p class="d" style="font-size:.85rem;margin:0 0 6px">Check these against your screen. Misread digits are the usual problem, so fix any that are wrong before applying.</p>' +
+  const box = $('scBox'), off = !url;
+  box.innerHTML = (off ? '' : '<img alt="Your photo" src="' + url + '">') + '<p class="d" style="font-size:.85rem;margin:0 0 6px">Check these against your screen. Misread digits are the usual problem, so fix any that are wrong before applying.</p>' +
     '<label for="scSeed">Initial seed (hex)</label><input id="scSeed" autocapitalize="characters" autocomplete="off" spellcheck="false" value="' + esc(v(r.initSeed).toUpperCase()) + '">' +
-    '<div class="row"><div><label for="scFrame">Frame / MT Advances</label><input id="scFrame" type="number" inputmode="numeric" value="' + esc(v(r.frame)) + '"></div>' +
-    '<div><label for="scTsv">TSV</label><input id="scTsv" type="number" inputmode="numeric" value="' + esc(v(r.tsv)) + '"></div></div>' +
-    '<div class="row"><div><label for="scTid">TID</label><input id="scTid" type="number" inputmode="numeric" value="' + esc(v(r.tid)) + '"></div>' +
-    '<div><label for="scSid">SID</label><input id="scSid" type="number" inputmode="numeric" value="' + esc(v(r.sid)) + '"></div></div>' +
+    '<div class="row"><div><label for="scFrame">Frame / MT Advances</label><input id="scFrame" inputmode="numeric" autocomplete="off" value="' + esc(v(r.frame)) + '"></div>' +
+    '<div><label for="scTsv">TSV</label><input id="scTsv" inputmode="numeric" autocomplete="off" value="' + esc(v(r.tsv)) + '"></div></div>' +
+    '<div class="row"><div><label for="scTid">TID</label><input id="scTid" inputmode="numeric" autocomplete="off" value="' + esc(v(r.tid)) + '"></div>' +
+    '<div><label for="scSid">SID</label><input id="scSid" inputmode="numeric" autocomplete="off" value="' + esc(v(r.sid)) + '"></div></div>' +
     (v(r.eggSeed) ? '<label for="scEgg">Egg seed (four hex words)</label><input id="scEgg" autocomplete="off" spellcheck="false" value="' + esc(v(r.eggSeed).toUpperCase()) + '">' : '') +
     (r.note ? '<p class="d" style="font-size:.8rem">' + esc(r.note) + '</p>' : '') +
-    '<div class="row2" style="margin-top:8px"><button id="scApply" class="go" type="button">Apply to the form</button><button id="scAgain" type="button">Retake</button></div><p id="scS" class="d" style="font-size:.85rem"></p>';
+    '<div class="row2" style="margin-top:8px"><button id="scApply" class="go" type="button">Apply to the form</button><button id="scAgain" type="button">' + (off ? 'Clear' : 'Retake') + '</button></div><p id="scS" class="d" style="font-size:.85rem"></p>';
   $('scAgain').onclick = showScan;
+  if (off) { // Live Text drops whole lines like "Seed: 1A2B3C4D" into a field; keep only the value
+    const fix = (id, f) => { const e = $(id); if (e) e.addEventListener('change', () => { const x = f(e.value); if (x != null) e.value = x; }); };
+    fix('scSeed', scanHex); ['scFrame', 'scTid', 'scSid', 'scTsv'].forEach(id => fix(id, scanNum));
+  }
   $('scApply').onclick = () => {
+    if (!url) { const a = scanHex($('scSeed').value); if (a != null) $('scSeed').value = a; ['scFrame', 'scTid', 'scSid', 'scTsv'].forEach(id => { const n = scanNum($(id).value); if (n != null) $(id).value = n; }); }
     const sd = $('scSeed').value.trim().toUpperCase(), fr = $('scFrame').value.trim(), eg = $('scEgg') ? $('scEgg').value.trim() : '';
     const done = [];
     if (/^[0-9A-F]{1,8}$/.test(sd)) { if ($('kind').value === 'egg' && $('game').value === '7') { if (eg && parseSeed(eg)) { $('seed').value = eg; done.push('egg seed'); } } else { $('seed').value = sd; done.push('seed'); } }
@@ -2340,6 +2382,7 @@ function showScanResult(r, url) {
 }
 $('toolFab').onclick = () => $('fabm').classList.toggle('on');
 $('fsB').onclick = showFS; $('scB').onclick = showScan; $('seedCam').onclick = () => {
+  if (!(window.claude && window.claude.use)) return showScanOffline();
   // the camera opens straight away (the tap is still a user gesture), then the photo is read
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.setAttribute('capture', 'environment');
   inp.onchange = async () => {
@@ -2378,13 +2421,13 @@ pnl.onclick = e => { if (e.target === pnl) pnl.classList.remove('on'); };
   // ---- Help
   const HELP = {
     nl: [['Beginnen', 'Kies bovenaan je spel (Gen 6 of 7) en wat je wilt jagen. Vul je Trainer ID/SID in (of kies een profiel), vul de initial seed in en tik op Calculate. Het scherm toont de frames die aan je filters voldoen.'],
-      ['Seed vinden', 'Gen 6: de initial seed zie je in de Gen 6-methode (bijvoorbeeld via de timeline of de Scan 3DS screen-knop). Gen 7: de seed staat op het eischerm/egg-scherm van de tool; neem een foto met "Scan 3DS screen" om velden automatisch te laten invullen.'],
+      ['Seed vinden', 'Gen 6: de initial seed zie je in de Gen 6-methode (bijvoorbeeld via de timeline of de Scan 3DS screen-knop). Gen 7: de seed staat op het eischerm/egg-scherm van de tool; neem een foto met "Scan 3DS screen" om velden automatisch te laten invullen. In de offline-versie (beginscherm) gebruikt Scan 3DS screen de eigen Live Text van je iPhone: tik op een veld en kies Tekst scannen, of plak tekst die je uit een foto hebt gekopieerd.'],
       ['Filters', 'Zet shiny, nature, hidden power, geslacht, ability en minimum-IV\'s. Per IV kun je "0" of "31" aantikken. De zoekactie gaat automatisch door tot de eerste match; "Search further" zoekt verder.'],
       ['Delay en tijd', 'Delay is het aantal frames dat het spel extra verbruikt. De tijd naast een frame is de wachttijd vanaf je seed. Onder Settings kun je kiezen of tijden in minuten/uren of alleen in seconden staan.'],
       ['Recent en Targets', 'Recent bewaart je laatste zoekopdrachten; tik er één aan om alle velden terug te zetten. Bij een resultaat zet je met de ster een doelframe vast; die staan onder Targets. Met Compare zet je twee resultaten naast elkaar.'],
       ['Wat niet kan', 'Een timeline met live geheugen van de 3DS (NTR) bestaat niet in een webpagina. Resultaten zijn niet vergeleken met de originele tool of op een echte 3DS getest; controleer bij twijfel het eerste frame in het spel.']],
     en: [['Getting started', 'Pick your game (Gen 6 or 7) and what you are hunting at the top. Enter your Trainer ID/SID (or pick a profile), enter the initial seed and tap Calculate. The page lists frames that match your filters.'],
-      ['Finding the seed', 'Gen 6: the initial seed comes from the Gen 6 method (for example the timeline or the Scan 3DS screen button). Gen 7: the seed is on the egg screen of the tool; take a photo with "Scan 3DS screen" to fill fields automatically.'],
+      ['Finding the seed', 'Gen 6: the initial seed comes from the Gen 6 method (for example the timeline or the Scan 3DS screen button). Gen 7: the seed is on the egg screen of the tool; take a photo with "Scan 3DS screen" to fill fields automatically. In the offline (home-screen) copy, Scan 3DS screen uses the iPhone’s own Live Text instead: tap a field and choose Scan Text, or paste text copied from a photo.'],
       ['Filters', 'Set shiny, nature, hidden power, gender, ability and minimum IVs. Per IV you can tap "0" or "31". The search continues automatically to the first match; "Search further" keeps going.'],
       ['Delay and time', 'Delay is the number of extra frames the game consumes. The time next to a frame is the wait from your seed. In Settings you can choose minutes/hours or seconds only.'],
       ['Recent and Targets', 'Recent keeps your last searches; tap one to restore every field. Use the star on a result to pin a target frame; pinned ones live under Targets. Compare puts two results side by side.'],
