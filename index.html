@@ -2611,7 +2611,9 @@ function close(now){if(state==='closed')return;clearTimeout(timer);if(now||rm){f
 var n=idx();f.classList.add('out');state='closing';sync();timer=setTimeout(function(){f.classList.remove('on','out');state='closed';sync()},260+40*(n-1)+60)}
 window.fabClose=close;window.fabOpen=open;
 fb.onclick=function(e){var t=Date.now();if(t-lastT<120)return;lastT=t;if(state==='open')close();else open()};
-document.addEventListener('click',function(e){if(state==='open'&&!e.target.closest('#fabm,#toolFab'))close()},true);
+// ignore the hidden haptics switch: on iOS (no navigator.vibrate) the haptics script calls lab.click() inside the real tap,
+// which used to close the menu here and let fb.onclick re-open it straight away
+document.addEventListener('click',function(e){if(state==='open'&&!e.target.closest('#fabm,#toolFab,#hapL'))close()},true);
 })();</script>
 </body>
 </html>
