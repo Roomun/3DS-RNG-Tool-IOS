@@ -1,0 +1,22 @@
+from playwright.sync_api import sync_playwright
+errs=[]
+with sync_playwright() as p:
+    b=p.chromium.launch(); pg=b.new_page(viewport={'width':390,'height':800})
+    pg.on('pageerror',lambda e:errs.append(str(e)))
+    pg.goto('file:///mnt/user-data/outputs/artifacts/7159972f-3327-4e9f-aaf2-0745ddc27954/index.html')
+    pg.evaluate("localStorage.clear(); localStorage.setItem('rng-layout-v1','all')"); pg.reload()
+    op=lambda: pg.evaluate("document.querySelectorAll('details.sec').forEach(d=>d.open=true)")
+    op(); pg.select_option('#game','7',force=True); pg.select_option('#kind','stat',force=True); op()
+    pg.fill('#seed','1A2B3C4D'); pg.fill('#from','0'); pg.fill('#to','300'); pg.click('#go'); pg.wait_for_timeout(600)
+    print('cards',pg.locator('#out .card').count(),'ctl',pg.locator('#out .ctl').count(), 'msg', pg.inner_text('#msg')[:60])
+    pg.locator('#out .card').nth(0).locator('.ct').click(); pg.locator('#out .card').nth(0).locator('.cc').click()
+    pg.locator('#out .card').nth(0).locator('.cm').click(); pg.locator('#out .card').nth(1).locator('.cm').click()
+    print('cmp panel', pg.evaluate("document.querySelector('#pnl').classList.contains('on')"), pg.evaluate("document.querySelectorAll('.cr.df').length"), 'diff rows')
+    pg.click('#pClose')
+    pg.click('#toolFab'); pg.click('#tgtB'); print('targets', pg.evaluate("document.querySelectorAll('.tg').length"), pg.inner_text('#pBody')[:80].replace('\n',' '))
+    pg.click('#pClose'); pg.click('#toolFab'); pg.click('#recB'); print('recent', pg.inner_text('#pBody')[:120].replace('\n',' '))
+    pg.click('.rr'); pg.wait_for_timeout(800); op(); print('restored kind',pg.input_value('#kind'),'seed',pg.input_value('#seed'),'to',pg.input_value('#to'))
+    pg.click('#toolFab'); pg.click('#setB'); pg.select_option('#sTheme','dark'); pg.select_option('#sTime','sec'); print('theme',pg.evaluate("document.documentElement.dataset.theme"))
+    pg.click('#pClose'); pg.click('#go'); pg.wait_for_timeout(600); print(pg.locator('#out .card .tm').first.inner_text())
+    pg.click('#toolFab'); pg.click('#hlpB'); print(pg.inner_text('#pBody')[:70].replace('\n',' '))
+    print('ERR',errs)
