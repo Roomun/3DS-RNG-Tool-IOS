@@ -14,5 +14,7 @@ s=s.replace('</body>',reg+'</body>')
 open(sys.argv[1],'w',encoding='utf-8').write(s)
 PY
 cp offline/sw.js offline/manifest.webmanifest offline/icon-192.png offline/icon-512.png offline/apple-touch-icon.png "$B/"
+# GitHub Pages copy: Settings -> Pages -> Deploy from a branch -> this branch, folder /docs
+rm -rf docs && mkdir -p docs && cp "$B"/* docs/ && touch docs/.nojekyll
 rm -f "dist/$V-offline.zip"; (cd "$B" && zip -q -X "$OLDPWD/dist/$V-offline.zip" *)
 rm -rf "$B"; echo "dist/$V-offline.zip"
