@@ -2413,10 +2413,22 @@ function scanParse(txt) { // pick labelled values out of text copied from a phot
   if (!r.initSeed && !r.eggSeed) { const w = t.toUpperCase().match(/\b[0-9A-F]{8}\b/g); if (w && w.length === 1) r.initSeed = w[0]; }
   return r;
 }
-function showScanOffline() {
-  openP('<h2>Scan 3DS screen</h2><p class="d" style="margin:0 0 8px;font-size:.85rem">This copy reads the screen with your iPhone’s own Live Text, so it works offline. Tap a field below, then tap <b>Scan Text</b> (the camera-and-text icon above the keyboard, or hold the field and pick Scan Text) and point it at the number on the 3DS. Tap Insert when it is right.</p>' +
-    '<details><summary>Or paste text from a photo</summary><p class="d" style="font-size:.8rem;margin:4px 0">In Photos, hold on the text in your picture of the 3DS screen, choose Select All and Copy, then paste it here. The seed, frame, TID, SID and TSV are picked out for you.</p><textarea id="scTxt" rows="4" autocomplete="off" spellcheck="false" placeholder="Paste here"></textarea><p id="scTxtS" class="d" style="font-size:.8rem;margin:4px 0"></p></details>' +
+// offline: take a photo, show it, and let the iPhone's Live Text copy the numbers out of it (press and hold on the text in the photo)
+let scanOffUrl = null;
+function scanOffCamera(capture) {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; if (capture) inp.setAttribute('capture', 'environment');
+  inp.onchange = () => { const f = inp.files && inp.files[0]; if (f) showScanOffline(f); };
+  inp.click();
+}
+function showScanOffline(photo) {
+  if (photo) { if (scanOffUrl) URL.revokeObjectURL(scanOffUrl); scanOffUrl = URL.createObjectURL(photo); }
+  const pic = photo ? '<img id="scPic" alt="Your photo of the 3DS screen" src="' + scanOffUrl + '" style="width:100%;border:1px solid var(--bd);border-radius:8px;margin:4px 0;-webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default"><p class="d" style="font-size:.85rem;margin:0 0 8px"><b>Press and hold on the numbers in the photo</b>, then <b>Select All</b> (or drag the handles) and <b>Copy</b>. Paste it in the box below and the seed, frame, TID, SID and TSV are filled in. No internet needed: your iPhone reads the photo itself.</p>' : '';
+  openP('<h2>Scan 3DS screen</h2>' + pic +
+    '<div class="row2"><button id="scOffCam" class="go" type="button">' + (photo ? 'Retake photo' : 'Take photo') + '</button><button id="scOffPick" type="button">Choose photo</button></div>' +
+    (photo ? '' : '<p class="d" style="margin:8px 0;font-size:.85rem">Take a photo of the 3DS screen, then copy the numbers out of it with Live Text. Or tap a field below and use <b>Scan Text</b> (the camera-and-text icon above the keyboard) to read a number straight from the camera.</p>') +
+    '<label for="scTxt">Paste copied text here</label><textarea id="scTxt" rows="3" autocomplete="off" spellcheck="false" placeholder="Paste here"></textarea><p id="scTxtS" class="d" style="font-size:.8rem;margin:4px 0"></p>' +
     '<div id="scBox"></div>');
+  $('scOffCam').onclick = () => scanOffCamera(true); $('scOffPick').onclick = () => scanOffCamera(false);
   showScanResult({}, null);
   const ta = $('scTxt'), st = $('scTxtS');
   ta.oninput = () => {
@@ -2463,7 +2475,7 @@ function showScanResult(r, url) {
 }
 $('toolFab').onclick = () => $('fabm').classList.toggle('on');
 $('fsB').onclick = showFS; $('scB').onclick = showScan; $('seedCam').onclick = () => {
-  if (!(window.claude && window.claude.use)) return showScanOffline();
+  if (!(window.claude && window.claude.use)) return scanOffCamera(true);
   // the camera opens straight away (the tap is still a user gesture), then the photo is read
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.setAttribute('capture', 'environment');
   inp.onchange = async () => {

@@ -12,8 +12,7 @@ let fails = 0; const ok = (c, m) => { console.log(c ? 'OK  ' : 'FAIL', m); fails
   await p.goto(URL); await p.waitForTimeout(600);
   await p.evaluate("kind.value='stat';kind.dispatchEvent(new Event('change',{bubbles:true}))"); await p.waitForTimeout(300); // Gen 7 Eggs takes the egg seed instead
   await p.tap('#toolFab'); await p.waitForTimeout(500); await p.tap('#scB'); await p.waitForTimeout(500);
-  ok(await p.evaluate("pnl.classList.contains('on') && /Scan Text/.test(pBody.textContent) && !!document.getElementById('scSeed')"), 'menu Scan opens Live Text form');
-  await p.evaluate("document.querySelector('#pBody details').open=true");
+  ok(await p.evaluate("pnl.classList.contains('on') && /Scan Text/.test(pBody.textContent) && !!document.getElementById('scSeed') && !!document.getElementById('scOffCam')"), 'menu Scan opens the offline form with Take photo');
   await p.fill('#scTxt', 'Initial Seed: 1a2b3c4O\nMT Advances: 1,234\nTID: 12345  SID: 54321\nTSV: 0777');
   const v = await p.evaluate("['scSeed','scFrame','scTid','scSid','scTsv'].map(i=>document.getElementById(i).value)");
   ok(JSON.stringify(v) === JSON.stringify(['1A2B3C40', '1234', '12345', '54321', '0777']), 'paste parsed ' + JSON.stringify(v) + ' / ' + await p.textContent('#scTxtS'));
@@ -23,8 +22,14 @@ let fails = 0; const ok = (c, m) => { console.log(c ? 'OK  ' : 'FAIL', m); fails
   await p.tap('#scApply'); await p.waitForTimeout(500);
   const f = await p.evaluate("[seed.value, from.value, tid.value, sid.value, pnl.classList.contains('on'), msg.textContent]");
   ok(f[0] === 'DEADBEEF' && f[1] === '500' && f[2] === '12345' && f[3] === '54321' && !f[4], 'apply fills form ' + JSON.stringify(f));
-  await p.tap('#seedCam'); await p.waitForTimeout(500);
-  ok(await p.evaluate("pnl.classList.contains('on') && !!document.getElementById('scTxt')"), '📷 Scan button opens Live Text form offline');
+  const PNG = { name: 'x.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') };
+  // 📷 Scan next to the seed opens the camera straight away, then shows the photo for Live Text + the paste box
+  let fc = p.waitForEvent('filechooser', { timeout: 3000 }).catch(() => null); await p.tap('#seedCam'); let ch = await fc;
+  ok(ch && ch.element && await ch.element().evaluate(e => e.getAttribute('capture') === 'environment'), '📷 Scan opens the camera offline (one tap)');
+  if (ch) { await ch.setFiles(PNG); await p.waitForTimeout(400); }
+  ok(await p.evaluate("pnl.classList.contains('on') && !!document.getElementById('scPic') && /Press and hold on the numbers/.test(pBody.textContent) && !!document.getElementById('scTxt') && scOffCam.textContent==='Retake photo'"), '  photo shown with Live Text instructions and paste box');
+  fc = p.waitForEvent('filechooser', { timeout: 3000 }).catch(() => null); await p.tap('#scOffPick'); ch = await fc;
+  ok(ch && await ch.element().evaluate(e => !e.hasAttribute('capture')), '  Choose photo opens the photo library');
   ok(await p.evaluate("JSON.stringify(scanParse('Egg Seed: 11111111,22222222,33333333,44444444'))") === JSON.stringify({ eggSeed: '11111111,22222222,33333333,44444444', initSeed: null, frame: null, tid: null, sid: null, tsv: null }), 'egg seed label not taken as initial seed');
   ok(!errs.length, 'no page errors ' + errs); await c.close();
   // --- Claude path (mocked) still shows the photo flow ---
