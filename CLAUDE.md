@@ -7,7 +7,8 @@ Three main script blocks plus small trailing scripts:
 - c0: engines (TinyMT, MT, SFMT), Gen 6/7 generators and searches, UI state, `widen()` async search with progress/cancel, `run()`.
 - c1: floating menu panel (`openP`, `#pnl`), Final Screen, camera scan (Claude `sample` capability in the artifact; Live Text / paste fallback offline).
 - c2: extras (help, settings, recent, targets, compare), summary bar, steps + target cards (`renderCards`, POOLS of sprite keys), layout setting.
-- Trailing scripts: header toggle, haptics (`rng-haptics-v1`), swipe between steps, pop/sheet animations, menu dropdown controller (`#fabm` / `#toolFab`, `window.fabOpen/fabClose`).
+- Trailing scripts: header toggle, haptics (`rng-haptics-v1`), swipe between steps, pop/sheet animations, menu dropdown controller (`#fabm` / `#toolFab`, `window.fabOpen/fabClose`), Check a miss (v49, last script: `DEX6` table + `openMiss`).
+- Check a miss (Gen 6 egg + horde): recalculates every frame in target ± window with the current settings (hordes also every Synchronize pass/fail and Hidden Ability position, since those come from TinyMT), matches what the user got (nature, gender, ability, IVs or ranges, stats→IVs via `DEX6` base stats with 0 EVs, characteristic from EC%6, shiny) and reports the offset plus delay advice. `DEX6` = species 1-721 names, base stats, abilities, gender from the original tool's personal_ao (tools/build_dex6.py, inputs in reference/). Tests: `node tools/smoke29.js`.
 Embedded assets: pixel font (base64 woff), sprites `PS`, `PSS`, `PS6`, `PSS6` (base64 PNG), apple-touch-icon.
 Storage keys: eggrng-v1, eggrng-profiles-v1, rng-layout-v1, rng-settings-v1, rng-recent-v1, rng-targets-v1, rng-haptics-v1.
 
@@ -15,6 +16,7 @@ Storage keys: eggrng-v1, eggrng-profiles-v1, rng-layout-v1, rng-settings-v1, rng
 - Short, mobile-friendly replies; be honest about what is untested (nothing has been tested on a real iPhone or against a real 3DS).
 - No timer feature, no manual Gen 6 timeline.
 - Before shipping: `node --check` on each extracted script, then a headless Playwright smoke test (tools/smoke*.py; set localStorage `rng-layout-v1`='all' and use force=True for selects when needed).
+- Gen 6 egg and horde code was reviewed line by line against the C# source (Egg6.cs, Wild6.Generate_Horde, RNGPool.Generate6/GenerateHorde6, delays 16/0 egg and 174 horde) in v49: same draw order and frame/delay mapping. Not run against the original binary.
 - Engine verification: tools/ref7.js is an independent BigInt reference built from the C# source; tools/verify7*.py compare it with the page (Gen 7 wild, UB, scan, ambush, Crabrawler, fishing, leads, shiny lock all matched). Not verified: Minior forme draw.
 
 ## MENU BUG — FIXED in v47, awaiting iPhone confirmation (top priority)
