@@ -7,8 +7,9 @@ let fails = 0; const ok = (c, m) => { console.log(c ? 'OK  ' : 'FAIL', m); fails
   for (const [vw, vh] of [[390, 844], [375, 667], [320, 568]]) {
     const c = await b.newContext({ viewport: { width: vw, height: vh }, hasTouch: true, isMobile: true });
     await c.addInitScript(() => { delete Navigator.prototype.vibrate; window.__ticks = 0; window.__fwd = 0;
-      // a "tick" = a real tap landing on the switch that the haptics script moves under the finger
-      document.addEventListener('click', e => { if (e.target.id === 'hapOv' && e.isTrusted) window.__ticks++; else if (!e.isTrusted && window.__hapFwd) window.__fwd++; }, true); });
+      // a "tick" = a real tap landing on the switch inside the button; __fwd counts the menu button's own handler runs
+      document.addEventListener('click', e => { if (e.isTrusted && e.target.classList && e.target.classList.contains('hapSw')) window.__ticks++; }, true);
+      document.addEventListener('DOMContentLoaded', () => { const f = document.getElementById('toolFab'), o = f && f.onclick; }); });
     const p = await c.newPage(), errs = []; p.on('pageerror', e => errs.push(String(e)));
     await p.goto(URL); await p.waitForTimeout(500);
     await p.evaluate(() => { const s = (id, v) => { const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }; s('game', '6'); s('kind', 'horde'); s('seed', '1A2B3C4D'); });
@@ -29,8 +30,16 @@ let fails = 0; const ok = (c, m) => { console.log(c ? 'OK  ' : 'FAIL', m); fails
     for (let i = 0; i < 4; i++) { await p.tap('#toolFab'); await p.waitForTimeout(600); r.push(await p.evaluate(() => getComputedStyle(fabm).display !== 'none')); }
     const t1 = await p.evaluate(() => window.__ticks);
     ok(JSON.stringify(r) === '[true,false,true,false]' && t1 - t0 === 4, '  toggles open/close, one switch tap per tap ' + JSON.stringify(r) + ' ticks ' + (t1 - t0));
-    ok(await p.evaluate(() => getComputedStyle(hapOv).display === 'none'), '  finger switch hidden again after the taps');
-    ok(await p.evaluate(() => window.__fwd) >= 4, '  taps were passed on to the buttons');
+    ok(await p.evaluate(() => [...document.querySelectorAll('button,summary')].every(b => b.querySelector(':scope>.hapSw'))), '  every button and summary has its switch');
+    ok(await p.evaluate(() => [...document.querySelectorAll('.hapSw')].every(sw => { const b = sw.parentNode.getBoundingClientRect(), q = sw.getBoundingClientRect(); return !q.width || (q.left >= b.left - 1 && q.right <= b.right + 1 && q.top >= b.top - 1 && q.bottom <= b.bottom + 1); })), '  every switch stays inside its button');
+    // section headers (summary) open/close with one tap
+    await p.evaluate(() => setStep(2)); await p.waitForTimeout(400);
+    const sm = await p.evaluate(() => { const d = [...document.querySelectorAll('details.sec')].find(x => x.offsetParent); return d ? (d.id || (d.id = 'tmpSec')) : null; });
+    const tapSum = async () => { const r = await p.evaluate(id => { const e = document.querySelector('#' + id + ' > summary'); e.scrollIntoView({ block: 'center' }); const r = e.getBoundingClientRect(); return [r.x + 30, r.y + r.height / 2]; }, sm); await p.waitForTimeout(150); await p.touchscreen.tap(r[0], r[1]); await p.waitForTimeout(200); };
+    const o0 = await p.evaluate(id => document.getElementById(id).open, sm); await tapSum();
+    const o1 = await p.evaluate(id => document.getElementById(id).open, sm); await tapSum();
+    ok(o1 === !o0 && await p.evaluate(id => document.getElementById(id).open, sm) === o0, '  section header toggles on a single tap');
+    await p.evaluate(() => setStep(4)); await p.waitForTimeout(400);
     // setup step (bar at the bottom): opens upward as before
     await p.evaluate(() => setStep(2)); await p.waitForTimeout(500);
     await p.tap('#toolFab'); await p.waitForTimeout(600);

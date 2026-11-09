@@ -85,7 +85,7 @@ button.go:active{transform:translateY(3px);box-shadow:0 1px 0 #3a2a9e}
 .tm{font-weight:700;color:var(--ac2)}
 #toolFab{white-space:nowrap;background:var(--ac);color:var(--acfg);border:2px solid var(--fg);box-shadow:2px 2px 0 var(--fg);font-family:var(--px);font-weight:700}
 #fabm{position:fixed;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:20;display:none;flex-direction:column;gap:8px;align-items:flex-end}
-#fabm.on{display:flex}.hap-press{filter:brightness(.92)}#fabm{overflow-y:auto;overscroll-behavior:contain;padding:2px 4px 4px;margin:-2px -4px}
+#fabm.on{display:flex}#fabm{overflow-y:auto;overscroll-behavior:contain;padding:2px 4px 4px;margin:-2px -4px}
 #fabm button{width:auto;white-space:nowrap;border:2px solid var(--fg);background:var(--card);box-shadow:3px 3px 0 var(--fg);font-family:var(--px);font-weight:700;padding:8px 14px}
 #pnl{position:fixed;inset:0;z-index:30;background:rgba(10,12,28,.55);display:none;align-items:flex-end;justify-content:center}
 #pnl.on{display:flex}
@@ -2280,7 +2280,7 @@ function fillW6() {
 $('vtype').onchange = () => { $('vdelay').value = W6DELAY[$('vtype').value]; syncW6(); };
 fillW6();
 const KEY = 'eggrng-v1', fields = [...document.querySelectorAll('main input, main select')].filter(el => !el.closest('#profBox'));
-const fid = el => el.id || (el.parentElement.id + ':' + [...el.parentElement.querySelectorAll('input')].indexOf(el));
+const fid = el => el.id || (el.parentElement.id + ':' + [...el.parentElement.querySelectorAll('input:not(.hapSw)')].indexOf(el));
 function save() { try { const d = {}; fields.forEach(el => { d[fid(el)] = el.type === 'checkbox' ? el.checked : el.value; }); localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {} profSync(); }
 try {
   const d = JSON.parse(localStorage.getItem(KEY) || 'null');
@@ -2702,7 +2702,7 @@ pnl.onclick = e => { if (e.target === pnl) pnl.classList.remove('on'); };
 <script>(function(){var t=document.getElementById('heroT'),x=document.getElementById('heroS');if(!t||!x)return;t.onclick=function(){var h=x.hidden;x.hidden=!h;t.setAttribute('aria-expanded',String(h))};})();</script>
 <script>(function(){
 var m=document.querySelector('main'),x0=0,y0=0,t0=0,ok=false;
-function blocked(el){while(el&&el!==m){if(/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName))return true;if(el.scrollWidth>el.clientWidth+4&&/(auto|scroll)/.test(getComputedStyle(el).overflowX))return true;el=el.parentElement}return false}
+function blocked(el){while(el&&el!==m){if(/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)&&!el.classList.contains('hapSw'))return true;if(el.scrollWidth>el.clientWidth+4&&/(auto|scroll)/.test(getComputedStyle(el).overflowX))return true;el=el.parentElement}return false}
 m.addEventListener('touchstart',function(e){if(e.touches.length!==1||blocked(e.target)){ok=false;return}var t=e.touches[0];x0=t.clientX;y0=t.clientY;t0=Date.now();ok=true},{passive:true});
 m.addEventListener('touchend',function(e){if(!ok||!window.setStep||m.dataset.step==='all')return;ok=false;var t=e.changedTouches[0],dx=t.clientX-x0,dy=t.clientY-y0;
 if(Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.8||Date.now()-t0>700||x0<24)return;
@@ -2711,26 +2711,33 @@ var cur=+m.dataset.step||1,max=document.querySelector('#out .card')?4:3,n=dx<0?M
 <script>(function(){
 // Haptics. Android: navigator.vibrate. iPhone: there is no vibration API, and iOS 27 only plays the switch haptic when a finger
 // toggles a real <input type=checkbox switch> (toggling one from code is silent: owner-tested v53). So on touch devices without
-// vibrate, one nearly invisible switch is moved over the button the finger lands on; the tap toggles it (haptic) and is passed on
-// to the button with button.click() (owner-tested v54: ticked 10 out of 10, button still worked).
+// vibrate, every button carries a nearly invisible switch (see below; owner-tested as button D in v54: ticked 10 out of 10).
 var K='rng-haptics-v1',on=true;try{on=localStorage.getItem(K)!=='0'}catch(e){}
 try{localStorage.removeItem('rng-haptics-m')}catch(e){}
-var SEL='button,summary',useSw=!navigator.vibrate,last=0,ov=null,tgt=null,hideT=null,x0=0,y0=0;
+var SEL='button,summary',useSw=!navigator.vibrate,last=0;
 function vib(){if(!on)return;var n=Date.now();if(n-last<60)return;last=n;try{navigator.vibrate(8)}catch(e){}}
 window.haptic=function(){if(!useSw)vib()};
 if(!useSw)document.addEventListener('click',function(e){if(!e.isTrusted)return;var t=e.target.closest&&e.target.closest(SEL);if(t&&!t.disabled&&t.id!=='hapT')vib()},true);
-function hide(){clearTimeout(hideT);if(ov)ov.style.display='none';if(tgt)tgt.classList.remove('hap-press');tgt=null}
-function mk(){ov=document.createElement('input');ov.type='checkbox';ov.setAttribute('switch','');ov.id='hapOv';ov.tabIndex=-1;ov.setAttribute('aria-hidden','true');
-ov.style.cssText='position:fixed;margin:0;padding:0;opacity:.02;z-index:9999;display:none;-webkit-tap-highlight-color:transparent';document.body.appendChild(ov);
-ov.addEventListener('click',function(e){e.stopPropagation();var t=tgt;hide();if(t&&t.isConnected&&!t.disabled){window.__hapFwd=true;try{t.click()}finally{window.__hapFwd=false}}})}
+// v56: every button and summary carries its own nearly invisible switch from the start (v55 moved one in on touchstart, and iOS
+// treats content that appears at touchdown as a hover: the first tap was swallowed, so buttons needed two taps). The tap lands on
+// the switch (haptic) and the click bubbles up to the button's own handlers; a summary is toggled here, since a click on a control
+// inside a summary doesn't open the details.
 if(useSw){
-document.addEventListener('touchstart',function(e){if(!on||e.touches.length!==1){hide();return}if(ov&&e.target===ov)return;
-var t=e.target.closest&&e.target.closest(SEL);if(!t||t.disabled){hide();return}var r=t.getBoundingClientRect();if(!r.width||!r.height)return;
-if(!ov)mk();clearTimeout(hideT);if(tgt&&tgt!==t)tgt.classList.remove('hap-press');tgt=t;t.classList.add('hap-press');
-x0=e.touches[0].clientX;y0=e.touches[0].clientY;var s=ov.style;s.left=r.left+'px';s.top=r.top+'px';s.width=r.width+'px';s.height=r.height+'px';s.display='block'},{passive:true,capture:true});
-document.addEventListener('touchmove',function(e){if(tgt&&e.touches[0]&&Math.abs(e.touches[0].clientX-x0)+Math.abs(e.touches[0].clientY-y0)>10)hide()},{passive:true,capture:true});
-document.addEventListener('touchend',function(){if(tgt)tgt.classList.remove('hap-press');clearTimeout(hideT);hideT=setTimeout(hide,700)},{passive:true,capture:true});
-document.addEventListener('touchcancel',hide,{passive:true,capture:true});window.addEventListener('scroll',function(){if(tgt)hide()},{passive:true,capture:true});
+var st=document.createElement('style');st.textContent='input[type=checkbox].hapSw{position:absolute!important;left:0!important;top:0!important;width:100%!important;height:100%!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;opacity:.02;z-index:3;cursor:pointer;-webkit-tap-highlight-color:transparent}html:not(.hapsw) .hapSw,button:disabled>.hapSw{display:none}';document.head.appendChild(st);
+// the switch must stay inside its button: a button whose own style keeps it position:static (the title) gets position:relative.
+// All styles are read first, then all switches added, so a long result list costs one style pass.
+var hasSw=function(el){for(var c=el.lastElementChild;c;c=c.previousElementSibling)if(c.classList.contains('hapSw'))return true;return false};
+var addAll=function(list){var need=[],k;for(k=0;k<list.length;k++)if(!hasSw(list[k])&&need.indexOf(list[k])<0)need.push(list[k]);
+var stat=need.map(function(el){return getComputedStyle(el).position==='static'});
+for(k=0;k<need.length;k++){var el=need[k];if(stat[k])el.style.position='relative';
+var i=document.createElement('input');i.type='checkbox';i.setAttribute('switch','');i.className='hapSw';i.tabIndex=-1;i.setAttribute('aria-hidden','true');el.appendChild(i)}};
+var collect=function(n,out){if(n.nodeType!==1||n.classList.contains('hapSw'))return;if(n.matches(SEL))out.push(n);var l=n.querySelectorAll(SEL);for(var k=0;k<l.length;k++)out.push(l[k])};
+var first=[];collect(document.body,first);addAll(first);
+new MutationObserver(function(ms){var out=[];for(var k=0;k<ms.length;k++){var m=ms[k];for(var j=0;j<m.addedNodes.length;j++)collect(m.addedNodes[j],out);if(m.target.nodeType===1&&m.target.matches(SEL))out.push(m.target)}if(out.length)addAll(out)}).observe(document.body,{childList:true,subtree:true});
+document.addEventListener('click',function(e){var i=e.target;if(!i.classList||!i.classList.contains('hapSw'))return;var s=i.parentNode;if(s&&s.tagName==='SUMMARY'&&s.parentNode&&s.parentNode.tagName==='DETAILS')s.parentNode.open=!s.parentNode.open});
+// the switches' own change/input events must not reach the form's listeners (autosave etc.)
+['change','input'].forEach(function(t){window.addEventListener(t,function(e){if(e.target.classList&&e.target.classList.contains('hapSw'))e.stopPropagation()},true)});
+document.documentElement.classList.toggle('hapsw',on);
 }
 function diag(){var ua=navigator.userAgent,ios=/iPhone|iPad|iPod/.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1),fr=false;try{fr=window.self!==window.top}catch(e){fr=true}
 var sa=(window.navigator.standalone===true)||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches);
@@ -2738,7 +2745,7 @@ return (useSw?'Method: switch under your finger (iPhone)':'Method: vibration')+'
 var sb=document.getElementById('setB');if(sb){var o=sb.onclick;sb.onclick=function(){o&&o.apply(this,arguments);var b=document.getElementById('pBody');
 var h='<label for="hapT">Haptic feedback</label><select id="hapT"><option value="1"'+(on?' selected':'')+'>On</option><option value="0"'+(on?'':' selected')+'>Off</option></select><button type="button" id="hapX" class="sm" style="margin-top:6px">Test haptic feedback</button><small class="hint">A light tick when you press buttons. iPhone: needs System Haptics on (Settings → Sounds &amp; Haptics). Most Android phones work too.</small><small class="hint" id="hapD"></small>';
 var sel=document.getElementById('sTheme');var host=sel?sel.parentNode:b;if(host){host.insertAdjacentHTML('beforeend',h);var x=document.getElementById('hapT');
-x.onchange=function(){on=x.value==='1';try{localStorage.setItem(K,on?'1':'0')}catch(e){}if(!on)hide();vib()};
+x.onchange=function(){on=x.value==='1';try{localStorage.setItem(K,on?'1':'0')}catch(e){}document.documentElement.classList.toggle('hapsw',on&&useSw);vib()};
 var tb=document.getElementById('hapX'),dd=document.getElementById('hapD');if(dd)dd.textContent=diag();if(tb)tb.onclick=function(){if(!useSw)vib();if(dd)dd.textContent=(on?'Tap sent. ':'Haptic feedback is off. ')+diag()}}}}
 })();</script>
 <script>(function(){
@@ -2768,8 +2775,8 @@ window.fabClose=close;window.fabOpen=open;
 fb.onclick=function(e){var t=Date.now();if(t-lastT<120)return;lastT=t;if(state==='open')close();else open()};
 // ignore the hidden haptics switch: on iOS (no navigator.vibrate) the haptics script calls lab.click() inside the real tap,
 // which used to close the menu here and let fb.onclick re-open it straight away
-// ignore synthetic clicks except the haptics switch passing a tap on (window.__hapFwd), and the switch itself
-document.addEventListener('click',function(e){if(!e.isTrusted&&!window.__hapFwd)return;if(state==='open'&&!e.target.closest('#fabm,#toolFab,#hapL,#hapOv'))close()},true);
+// ignore synthetic clicks (a switch inside a button is a real tap and bubbles normally)
+document.addEventListener('click',function(e){if(!e.isTrusted)return;if(state==='open'&&!e.target.closest('#fabm,#toolFab,#hapL'))close()},true);
 })();</script>
 <script>
 // ---- Check a miss (Gen 6 eggs and hordes): which frame did the Pokémon you got come from? ----
