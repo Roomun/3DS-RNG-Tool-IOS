@@ -40,6 +40,11 @@ const cards = p => p.evaluate(() => [...document.querySelectorAll('#hlist .htb')
   // unpick -> back to one ratio
   await p.evaluate(() => document.querySelectorAll('details.sec').forEach(d => d.open = true)); await p.tap('#hlist .htb.on'); await p.waitForTimeout(200);
   ok(await p.evaluate(() => htype.value === '0' && !hratio.disabled), 'tapping the picked horde again unpicks it');
+  // per-version positions (checked against PKHeX): Y Route 11 Nidoran♀ in position 2, Y Route 12 Miltank in 4, OR Route 110 Plusle in 4
+  const pv = await p.evaluate(() => { const a = (gm, loc) => HORDE6[gm].find(x => x[0] === loc);
+    return [hordeSpecies('xy', true, a('xy', 54), 0).indexOf(29), hordeSpecies('xy', false, a('xy', 54), 0).indexOf(29), hordeSpecies('xy', true, a('xy', 62), 2).indexOf(241), hordeSpecies('oras', false, a('oras', 222), 2).indexOf(311)]; });
+  ok(JSON.stringify(pv) === '[1,4,3,3]', 'per-version mixed positions ' + JSON.stringify(pv));
+  ok(await p.evaluate(() => [...document.querySelectorAll('#hlist .htb')].every(b => b.querySelector('img'))), 'horde cards have sprites');
   ok(!errs.length, 'no page errors ' + errs);
   await b.close(); console.log('FAILS', fails); process.exit(fails ? 1 : 0);
 })();
