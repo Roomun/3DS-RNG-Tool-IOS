@@ -8,6 +8,7 @@ const URL = url.pathToFileURL(path.resolve(process.argv[2] || 'index.html')).hre
   let fails = 0;
   for (const novib of [false, true]) for (const rm of ['no-preference', 'reduce']) {
     const b = await chromium.launch(), c = await b.newContext({ viewport: { width: 390, height: 760 }, hasTouch: true, isMobile: true, reducedMotion: rm });
+    if (process.env.IOS) await c.addInitScript('delete Navigator.prototype.vibrate');
     if (novib) await c.addInitScript('delete Navigator.prototype.vibrate');
     const pg = await c.newPage(), errs = []; pg.on('pageerror', e => errs.push(String(e)));
     await pg.goto(URL); await pg.waitForTimeout(700);

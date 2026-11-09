@@ -6,9 +6,9 @@ let fails = 0; const ok = (c, m) => { console.log(c ? 'OK  ' : 'FAIL', m); fails
   const b = await chromium.launch();
   for (const [vw, vh] of [[390, 844], [375, 667], [320, 568]]) {
     const c = await b.newContext({ viewport: { width: vw, height: vh }, hasTouch: true, isMobile: true });
-    await c.addInitScript(() => { delete Navigator.prototype.vibrate; window.__ticks = 0; const o = HTMLLabelElement.prototype.click;
-      HTMLLabelElement.prototype.click = function () { const i = this.querySelector('input[switch]'); if (i) window.__ticks++; return o.call(this); };
-      const oi = HTMLInputElement.prototype.click; window.__iticks = 0; HTMLInputElement.prototype.click = function () { if (this.hasAttribute('switch')) window.__iticks++; return oi.call(this); }; });
+    await c.addInitScript(() => { delete Navigator.prototype.vibrate; window.__ticks = 0; window.__fwd = 0;
+      // a "tick" = a real tap landing on the switch that the haptics script moves under the finger
+      document.addEventListener('click', e => { if (e.target.id === 'hapOv' && e.isTrusted) window.__ticks++; else if (!e.isTrusted && window.__hapFwd) window.__fwd++; }, true); });
     const p = await c.newPage(), errs = []; p.on('pageerror', e => errs.push(String(e)));
     await p.goto(URL); await p.waitForTimeout(500);
     await p.evaluate(() => { const s = (id, v) => { const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }; s('game', '6'); s('kind', 'horde'); s('seed', '1A2B3C4D'); });
@@ -28,8 +28,9 @@ let fails = 0; const ok = (c, m) => { console.log(c ? 'OK  ' : 'FAIL', m); fails
     const t0 = await p.evaluate(() => window.__ticks), r = [];
     for (let i = 0; i < 4; i++) { await p.tap('#toolFab'); await p.waitForTimeout(600); r.push(await p.evaluate(() => getComputedStyle(fabm).display !== 'none')); }
     const t1 = await p.evaluate(() => window.__ticks);
-    ok(JSON.stringify(r) === '[true,false,true,false]' && t1 - t0 === 4, '  toggles open/close with a haptic per tap ' + JSON.stringify(r) + ' ticks ' + (t1 - t0));
-    ok(await p.evaluate(() => !document.getElementById('hapL')), '  no hidden switch left behind');
+    ok(JSON.stringify(r) === '[true,false,true,false]' && t1 - t0 === 4, '  toggles open/close, one switch tap per tap ' + JSON.stringify(r) + ' ticks ' + (t1 - t0));
+    ok(await p.evaluate(() => getComputedStyle(hapOv).display === 'none'), '  finger switch hidden again after the taps');
+    ok(await p.evaluate(() => window.__fwd) >= 4, '  taps were passed on to the buttons');
     // setup step (bar at the bottom): opens upward as before
     await p.evaluate(() => setStep(2)); await p.waitForTimeout(500);
     await p.tap('#toolFab'); await p.waitForTimeout(600);
@@ -38,22 +39,13 @@ let fails = 0; const ok = (c, m) => { console.log(c ? 'OK  ' : 'FAIL', m); fails
     // settings test button + diagnostics
     await p.tap('#toolFab'); await p.waitForTimeout(500); await p.tap('#setB'); await p.waitForTimeout(500);
     const t2 = await p.evaluate(() => window.__ticks); await p.evaluate(() => hapX.scrollIntoView()); await p.tap('#hapX'); await p.waitForTimeout(200);
-    ok(await p.evaluate(() => window.__ticks) - t2 === 1 && /Vibration API: no/.test(await p.evaluate(() => hapD.textContent)), '  Test haptic button fires once and shows info: ' + await p.evaluate(() => hapD.textContent));
-    // methods B and C from the "No tick?" section, and the saved choice
-    await p.evaluate(() => { hapTry.open = true; hapTry.scrollIntoView(); });
-    const z = () => p.evaluate(() => [window.__ticks, window.__iticks]);
-    let z0 = await z(); await p.tap('[data-hm="b"]'); let z1 = await z();
-    ok(z1[1] - z0[1] === 1 && z1[0] === z0[0], '  Try B toggles the switch input once');
-    z0 = z1; await p.tap('[data-hm="c"]'); z1 = await z();
-    ok(z1[0] - z0[0] === 1, '  Try C clicks the switch label once');
-    await p.evaluate(() => { hapM.value = 'b'; hapM.dispatchEvent(new Event('change')); });
-    ok(await p.evaluate(() => localStorage.getItem('rng-haptics-m')) === 'b', '  method choice saved');
-    await p.tap('#pClose'); await p.waitForTimeout(500);
-    z0 = await z(); const rb = [];
-    for (let i = 0; i < 4; i++) { await p.tap('#toolFab'); await p.waitForTimeout(600); rb.push(await p.evaluate(() => getComputedStyle(fabm).display !== 'none')); }
-    z1 = await z();
-    ok(JSON.stringify(rb) === '[true,false,true,false]' && z1[1] - z0[1] === 4, '  with method B the menu still toggles, one haptic per tap ' + JSON.stringify(rb));
-    await p.evaluate(() => localStorage.setItem('rng-haptics-m', 'a'));
+    ok(await p.evaluate(() => window.__ticks) - t2 === 1 && /switch under your finger/.test(await p.evaluate(() => hapD.textContent)), '  Test haptic button: one switch tap, info: ' + await p.evaluate(() => hapD.textContent));
+    // haptics off: no switch under the finger, buttons still work
+    await p.evaluate(() => { hapT.value = '0'; hapT.dispatchEvent(new Event('change')); }); await p.tap('#pClose'); await p.waitForTimeout(500);
+    const t3 = await p.evaluate(() => window.__ticks), ro = [];
+    for (let i = 0; i < 2; i++) { await p.tap('#toolFab'); await p.waitForTimeout(600); ro.push(await p.evaluate(() => getComputedStyle(fabm).display !== 'none')); }
+    ok(await p.evaluate(() => window.__ticks) === t3 && JSON.stringify(ro) === '[true,false]', '  haptics off: menu works without the switch');
+    await p.evaluate(() => localStorage.setItem('rng-haptics-v1', '1'));
     ok(!errs.length, '  no page errors ' + errs);
     await c.close();
   }

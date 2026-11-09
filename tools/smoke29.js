@@ -6,6 +6,7 @@ let fails = 0; const ok = (c, m) => { console.log(c ? 'OK  ' : 'FAIL', m); fails
 const set = (p, id, v) => p.evaluate(([id, v]) => { const e = document.getElementById(id); if (e.type === 'checkbox') e.checked = v; else e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }, [id, v]);
 (async () => {
   const b = await chromium.launch(), c = await b.newContext({ viewport: { width: 390, height: 760 }, hasTouch: true, isMobile: true });
+  if (process.env.IOS) await c.addInitScript('delete Navigator.prototype.vibrate');
   await c.addInitScript("localStorage.setItem('rng-layout-v1','all')");
   const p = await c.newPage(), errs = []; p.on('pageerror', e => errs.push(String(e)));
   await p.goto(URL); await p.waitForTimeout(600);

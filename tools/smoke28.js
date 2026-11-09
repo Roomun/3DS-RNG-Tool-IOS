@@ -6,6 +6,7 @@ let fails = 0; const ok = (c, m) => { console.log(c ? 'OK  ' : 'FAIL', m); fails
   const b = await chromium.launch();
   // --- offline: no window.claude ---
   let c = await b.newContext({ viewport: { width: 390, height: 760 }, hasTouch: true, isMobile: true });
+  if (process.env.IOS) await c.addInitScript('delete Navigator.prototype.vibrate');
   await c.addInitScript("localStorage.setItem('rng-layout-v1','all')");
   let p = await c.newPage(), errs = []; p.on('pageerror', e => errs.push(String(e)));
   await p.goto(URL); await p.waitForTimeout(600);
@@ -28,6 +29,7 @@ let fails = 0; const ok = (c, m) => { console.log(c ? 'OK  ' : 'FAIL', m); fails
   ok(!errs.length, 'no page errors ' + errs); await c.close();
   // --- Claude path (mocked) still shows the photo flow ---
   c = await b.newContext({ viewport: { width: 390, height: 760 }, hasTouch: true, isMobile: true });
+  if (process.env.IOS) await c.addInitScript('delete Navigator.prototype.vibrate');
   await c.addInitScript("window.claude={use:async()=>({limits:async()=>({images:true}),json:async()=>({initSeed:'ABCDEF12',frame:42,note:'mock'})})}");
   p = await c.newPage(); errs = []; p.on('pageerror', e => errs.push(String(e)));
   await p.goto(URL); await p.waitForTimeout(600);

@@ -6,9 +6,9 @@ const set = (p, id, v) => p.evaluate(([id, v]) => { const e = document.getElemen
 const cards = p => p.evaluate(() => [...document.querySelectorAll('#hlist .htb')].map(b => b.innerText.replace(/\s+/g, ' ').trim()));
 (async () => {
   const b = await chromium.launch(), c = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
-  await c.addInitScript("if(!sessionStorage.getItem('x')){localStorage.clear();sessionStorage.setItem('x','1')} localStorage.setItem('rng-layout-v1','all')");
+  if (process.env.IOS) await c.addInitScript('delete Navigator.prototype.vibrate');
   const p = await c.newPage(), errs = []; p.on('pageerror', e => errs.push(String(e)));
-  await p.goto(URL); await p.waitForTimeout(600);
+  await p.goto(URL); await p.evaluate(() => { localStorage.clear(); localStorage.setItem('rng-layout-v1', 'all'); }); await p.reload(); await p.waitForTimeout(600);
   await set(p, 'game', '6'); await set(p, 'kind', 'horde');
   await set(p, 'hver', 'x'); await set(p, 'harea', '28:0');
   let cs = await cards(p); console.log('   X Route 5:', cs.join(' | '));
@@ -36,7 +36,8 @@ const cards = p => p.evaluate(() => [...document.querySelectorAll('#hlist .htb')
   ok(iv31.length && iv31.every(n => n >= 3), 'every Mime Jr. result has at least three 31s (' + iv31.length + ' cards)');
   // remembered after reload
   await p.reload(); await p.waitForTimeout(800);
-  ok(await p.evaluate(() => hver.value === 'x' && harea.value === '56:0' && htype.value === '1' && document.querySelector('#hlist .htb.on') && hratio.disabled), 'game, route and horde restored after reload');
+  { const st = await p.evaluate(() => [hver.value, harea.value, htype.value, !!document.querySelector('#hlist .htb.on'), hratio.disabled, (JSON.parse(localStorage.getItem('eggrng-v1') || '{}')).htype]);
+    ok(JSON.stringify(st) === '["x","56:0","1",true,true,"1"]', 'game, route and horde restored after reload ' + JSON.stringify(st)); }
   // unpick -> back to one ratio
   await p.evaluate(() => document.querySelectorAll('details.sec').forEach(d => d.open = true)); await p.tap('#hlist .htb.on'); await p.waitForTimeout(200);
   ok(await p.evaluate(() => htype.value === '0' && !hratio.disabled), 'tapping the picked horde again unpicks it');
