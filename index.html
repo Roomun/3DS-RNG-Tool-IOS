@@ -85,7 +85,7 @@ button.go:active{transform:translateY(3px);box-shadow:0 1px 0 #3a2a9e}
 .tm{font-weight:700;color:var(--ac2)}
 #toolFab{white-space:nowrap;background:var(--ac);color:var(--acfg);border:2px solid var(--fg);box-shadow:2px 2px 0 var(--fg);font-family:var(--px);font-weight:700}
 #fabm{position:fixed;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:20;display:none;flex-direction:column;gap:8px;align-items:flex-end}
-#fabm.on{display:flex}
+#fabm.on{display:flex}#fabm{overflow-y:auto;overscroll-behavior:contain;padding:2px 4px 4px;margin:-2px -4px}
 #fabm button{width:auto;white-space:nowrap;border:2px solid var(--fg);background:var(--card);box-shadow:3px 3px 0 var(--fg);font-family:var(--px);font-weight:700;padding:8px 14px}
 #pnl{position:fixed;inset:0;z-index:30;background:rgba(10,12,28,.55);display:none;align-items:flex-end;justify-content:center}
 #pnl.on{display:flex}
@@ -188,8 +188,11 @@ html{scroll-behavior:smooth}
 #pnl.on.out{animation:fadeOut .34s ease both}#pnl.on.out .sheet{animation:sheetOut .34s cubic-bezier(.75,.1,.8,.1) both}
 #fabm.on button{animation:fabIn .26s cubic-bezier(.2,.9,.25,1) both}#fabm.on button{animation-delay:calc(var(--k,0)*.04s)}
 @media (prefers-reduced-motion:reduce){#steps button.pop,#pnl.on,#pnl.on .sheet,#pnl.on.out,#pnl.on.out .sheet,#fabm.on button{animation:none!important}}
+@keyframes fabInD{from{opacity:0;transform:translateY(-16px) scale(.92)}to{opacity:1;transform:none}}
+@keyframes fabOutD{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-16px) scale(.92)}}
 @keyframes fabOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(16px) scale(.92)}}
 #fabm.on.out button{animation:fabOut .26s cubic-bezier(.5,0,.8,.3) both!important;animation-delay:calc((var(--n,1) - 1 - var(--k,0))*.04s)!important}
+#fabm.down.on button{animation-name:fabInD}#fabm.down.on.out button{animation-name:fabOutD!important}
 @media (prefers-reduced-motion:reduce){#fabm.on.out button{animation:none!important}}
 </style>
 </head>
@@ -2705,16 +2708,22 @@ m.addEventListener('touchend',function(e){if(!ok||!window.setStep||m.dataset.ste
 if(Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.8||Date.now()-t0>700||x0<24)return;
 var cur=+m.dataset.step||1,max=document.querySelector('#out .card')?4:3,n=dx<0?Math.min(max,cur+1):Math.max(1,cur-1);if(n!==cur)window.setStep(n)},{passive:true});
 })();</script>
-<label id="hapL" aria-hidden="true" style="position:fixed;left:-99px;top:0;width:1px;height:1px;opacity:0;pointer-events:none"><input type="checkbox" switch id="hapI" tabindex="-1"></label>
 <script>(function(){
 var K='rng-haptics-v1',on=true;try{on=localStorage.getItem(K)!=='0'}catch(e){}
-var lab=document.getElementById('hapL'),reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches,last=0;
-function tap(){if(!on)return;var n=Date.now();if(n-last<60)return;last=n;try{if(navigator.vibrate){navigator.vibrate(8)}else if(lab){lab.click()}}catch(e){}}
+var last=0;
+// iOS has no navigator.vibrate. Toggling an <input type=checkbox switch> plays the system haptic (iOS 18+), so each tap makes a
+// fresh hidden switch, clicks its label and removes it again (the technique of the ios-haptics library). Must run inside the user's tap.
+function iosTick(){var l=document.createElement('label');l.id='hapL';l.setAttribute('aria-hidden','true');l.style.display='none';
+var i=document.createElement('input');i.type='checkbox';i.setAttribute('switch','');l.appendChild(i);document.head.appendChild(l);l.click();document.head.removeChild(l)}
+function tap(force){if(!on&&!force)return;var n=Date.now();if(n-last<60&&!force)return;last=n;try{if(navigator.vibrate)navigator.vibrate(8);else iosTick()}catch(e){}}
+function diag(){var ua=navigator.userAgent,m=ua.match(/OS (\d+)[_.](\d+)/),ios=/iPhone|iPad|iPod/.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1),fr=false;try{fr=window.self!==window.top}catch(e){fr=true}
+var sa=(window.navigator.standalone===true)||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches);
+return (navigator.vibrate?'Vibration API: yes':'Vibration API: no (iPhone method)')+' · '+(ios?'iOS '+(m?m[1]+'.'+m[2]:'?'):'not iOS')+' · '+(sa?'home-screen app':fr?'inside the claude.ai page':'browser tab')+(ios&&m&&+m[1]<18?' · needs iOS 18 or later':'')}
 window.haptic=tap;
-document.addEventListener('click',function(e){var t=e.target.closest&&e.target.closest('button,.kc,summary,#steps button');if(t&&!t.disabled&&t.id!=='hapT')tap()},true);
+document.addEventListener('click',function(e){if(!e.isTrusted)return;var t=e.target.closest&&e.target.closest('button,.kc,summary,#steps button');if(t&&!t.disabled&&t.id!=='hapT'&&t.id!=='hapX')tap()},true);
 var sb=document.getElementById('setB');if(sb){var o=sb.onclick;sb.onclick=function(){o&&o.apply(this,arguments);var b=document.getElementById('pBody')||document.querySelector('#panel .body')||document.querySelector('[id^=p]');
-var h='<label for="hapT">Haptic feedback</label><select id="hapT"><option value="1"'+(on?' selected':'')+'>On</option><option value="0"'+(on?'':' selected')+'>Off</option></select><small class="hint">Light taps when you press buttons. Works on iPhone with iOS 17.4 or later and on most Android phones.</small>';
-var sel=document.getElementById('sTheme');var host=sel?sel.parentNode:b;if(host){host.insertAdjacentHTML('beforeend',h);var x=document.getElementById('hapT');x.onchange=function(){on=x.value==='1';try{localStorage.setItem(K,on?'1':'0')}catch(e){}tap()}}}}
+var h='<label for="hapT">Haptic feedback</label><select id="hapT"><option value="1"'+(on?' selected':'')+'>On</option><option value="0"'+(on?'':' selected')+'>Off</option></select><button type="button" id="hapX" class="sm" style="margin-top:6px">Test haptic feedback</button><small class="hint">Light taps when you press buttons. Works on iPhone with iOS 18 or later (with System Haptics on in Settings → Sounds &amp; Haptics) and on most Android phones.</small><small class="hint" id="hapD"></small>';
+var sel=document.getElementById('sTheme');var host=sel?sel.parentNode:b;if(host){host.insertAdjacentHTML('beforeend',h);var x=document.getElementById('hapT');x.onchange=function(){on=x.value==='1';try{localStorage.setItem(K,on?'1':'0')}catch(e){}tap()};var tb=document.getElementById('hapX'),dd=document.getElementById('hapD');if(dd)dd.textContent=diag();if(tb)tb.onclick=function(){tap(true);if(dd)dd.textContent='Sent a tap. '+diag()}}}}
 })();</script>
 <script>(function(){
 var rm=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches,pnl=document.getElementById('pnl');
@@ -2727,17 +2736,23 @@ cl.add=function(){var a=[].slice.call(arguments);if(a.indexOf('on')>-1){clearTim
 <script>(function(){
 var f=document.getElementById('fabm'),fb=document.getElementById('toolFab'),bar=fb&&fb.closest('.bar');if(!f||!fb)return;
 var rm=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches,state='closed',timer=null,lastT=0;
-function idx(){var b=[].filter.call(f.children,function(c){return c.tagName==='BUTTON'}),n=b.length;b.forEach(function(c,i){c.style.setProperty('--k',n-1-i);c.style.setProperty('--n',n)});return n}
-function place(){try{var r=(bar||fb).getBoundingClientRect();f.style.bottom=Math.max(8,window.innerHeight-r.top+8)+'px'}catch(e){}}
+function idx(){var b=[].filter.call(f.children,function(c){return c.tagName==='BUTTON'}),n=b.length,dn=f.classList.contains('down');b.forEach(function(c,i){c.style.setProperty('--k',dn?i:n-1-i);c.style.setProperty('--n',n)});return n}
+// above the bar when the items fit there, otherwise below it if there is more room; capped to the screen and scrollable
+function place(){try{var r=(bar||fb).getBoundingClientRect(),vh=window.innerHeight,up=r.top-16,dw=vh-r.bottom-16;
+f.style.maxHeight='none';var h=f.scrollHeight,down=h>up&&dw>up;f.classList.toggle('down',down);
+if(down){f.style.top=(r.bottom+8)+'px';f.style.bottom='auto';f.style.maxHeight=Math.max(100,dw)+'px'}
+else{f.style.top='auto';f.style.bottom=Math.max(8,vh-r.top+8)+'px';f.style.maxHeight=Math.max(100,up)+'px'}}catch(e){}}
+function follow(){if(state!=='closed')place()}
+window.addEventListener('scroll',follow,{passive:true});window.addEventListener('resize',follow);
 function sync(){fb.setAttribute('aria-expanded',state==='open'?'true':'false')}
-function open(){clearTimeout(timer);f.classList.remove('out');idx();place();f.classList.add('on');state='open';sync()}
+function open(){clearTimeout(timer);f.classList.remove('out');f.classList.add('on');place();idx();state='open';sync()}
 function close(now){if(state==='closed')return;clearTimeout(timer);if(now||rm){f.classList.remove('on','out');state='closed';sync();return}
 var n=idx();f.classList.add('out');state='closing';sync();timer=setTimeout(function(){f.classList.remove('on','out');state='closed';sync()},260+40*(n-1)+60)}
 window.fabClose=close;window.fabOpen=open;
 fb.onclick=function(e){var t=Date.now();if(t-lastT<120)return;lastT=t;if(state==='open')close();else open()};
 // ignore the hidden haptics switch: on iOS (no navigator.vibrate) the haptics script calls lab.click() inside the real tap,
 // which used to close the menu here and let fb.onclick re-open it straight away
-document.addEventListener('click',function(e){if(state==='open'&&!e.target.closest('#fabm,#toolFab,#hapL'))close()},true);
+document.addEventListener('click',function(e){if(!e.isTrusted)return;if(state==='open'&&!e.target.closest('#fabm,#toolFab,#hapL'))close()},true);
 })();</script>
 <script>
 // ---- Check a miss (Gen 6 eggs and hordes): which frame did the Pokémon you got come from? ----
