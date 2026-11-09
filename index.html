@@ -2713,17 +2713,27 @@ var K='rng-haptics-v1',on=true;try{on=localStorage.getItem(K)!=='0'}catch(e){}
 var last=0;
 // iOS has no navigator.vibrate. Toggling an <input type=checkbox switch> plays the system haptic (iOS 18+), so each tap makes a
 // fresh hidden switch, clicks its label and removes it again (the technique of the ios-haptics library). Must run inside the user's tap.
-function iosTick(){var l=document.createElement('label');l.id='hapL';l.setAttribute('aria-hidden','true');l.style.display='none';
-var i=document.createElement('input');i.type='checkbox';i.setAttribute('switch','');l.appendChild(i);document.head.appendChild(l);l.click();document.head.removeChild(l)}
-function tap(force){if(!on&&!force)return;var n=Date.now();if(n-last<60&&!force)return;last=n;try{if(navigator.vibrate)navigator.vibrate(8);else iosTick()}catch(e){}}
+// three ways to toggle a switch from code; the owner's iPhone (iOS 27) felt nothing with A, so Settings lets them try B and C (v53)
+var MK='rng-haptics-m',meth='a';try{meth=localStorage.getItem(MK)||'a'}catch(e){}
+var keep=null;
+function keepSw(){if(keep&&keep.parentNode)return keep;keep=document.createElement('label');keep.id='hapL';keep.setAttribute('aria-hidden','true');
+keep.style.cssText='position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:.02;overflow:hidden;pointer-events:none;z-index:-1';
+var i=document.createElement('input');i.type='checkbox';i.setAttribute('switch','');i.tabIndex=-1;keep.appendChild(i);document.body.appendChild(keep);return keep}
+function iosTick(m){m=m||meth;
+if(m==='a'){var l=document.createElement('label');l.id='hapL';l.setAttribute('aria-hidden','true');l.style.display='none';
+var i=document.createElement('input');i.type='checkbox';i.setAttribute('switch','');l.appendChild(i);document.head.appendChild(l);l.click();document.head.removeChild(l);return}
+var k=keepSw();if(m==='b')k.firstChild.click();else k.click()}
+function tap(force,m){if(!on&&!force)return;var n=Date.now();if(n-last<60&&!force)return;last=n;try{if(navigator.vibrate&&!m)navigator.vibrate(8);else iosTick(m)}catch(e){}}
 function diag(){var ua=navigator.userAgent,m=ua.match(/OS (\d+)[_.](\d+)/),ios=/iPhone|iPad|iPod/.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1),fr=false;try{fr=window.self!==window.top}catch(e){fr=true}
 var sa=(window.navigator.standalone===true)||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches);
 return (navigator.vibrate?'Vibration API: yes':'Vibration API: no (iPhone method)')+' · '+(ios?'iOS '+(m?m[1]+'.'+m[2]:'?'):'not iOS')+' · '+(sa?'home-screen app':fr?'inside the claude.ai page':'browser tab')+(ios&&m&&+m[1]<18?' · needs iOS 18 or later':'')}
 window.haptic=tap;
-document.addEventListener('click',function(e){if(!e.isTrusted)return;var t=e.target.closest&&e.target.closest('button,.kc,summary,#steps button');if(t&&!t.disabled&&t.id!=='hapT'&&t.id!=='hapX')tap()},true);
+document.addEventListener('click',function(e){if(!e.isTrusted)return;var t=e.target.closest&&e.target.closest('button,.kc,summary,#steps button');if(t&&!t.disabled&&t.id!=='hapT'&&t.id!=='hapX'&&!t.dataset.hm)tap()},true);
 var sb=document.getElementById('setB');if(sb){var o=sb.onclick;sb.onclick=function(){o&&o.apply(this,arguments);var b=document.getElementById('pBody')||document.querySelector('#panel .body')||document.querySelector('[id^=p]');
-var h='<label for="hapT">Haptic feedback</label><select id="hapT"><option value="1"'+(on?' selected':'')+'>On</option><option value="0"'+(on?'':' selected')+'>Off</option></select><button type="button" id="hapX" class="sm" style="margin-top:6px">Test haptic feedback</button><small class="hint">Light taps when you press buttons. Works on iPhone with iOS 18 or later (with System Haptics on in Settings → Sounds &amp; Haptics) and on most Android phones.</small><small class="hint" id="hapD"></small>';
-var sel=document.getElementById('sTheme');var host=sel?sel.parentNode:b;if(host){host.insertAdjacentHTML('beforeend',h);var x=document.getElementById('hapT');x.onchange=function(){on=x.value==='1';try{localStorage.setItem(K,on?'1':'0')}catch(e){}tap()};var tb=document.getElementById('hapX'),dd=document.getElementById('hapD');if(dd)dd.textContent=diag();if(tb)tb.onclick=function(){tap(true);if(dd)dd.textContent='Sent a tap. '+diag()}}}}
+var h='<label for="hapT">Haptic feedback</label><select id="hapT"><option value="1"'+(on?' selected':'')+'>On</option><option value="0"'+(on?'':' selected')+'>Off</option></select><button type="button" id="hapX" class="sm" style="margin-top:6px">Test haptic feedback</button><details id="hapTry" style="margin-top:8px"><summary>No tick? Try these</summary><label class="chk" style="margin-top:8px"><input type="checkbox" switch id="hapSw">1. Tap this switch yourself</label><small class="hint">If even this doesn’t tick, your iPhone gives no haptics to web pages, and no app setting can change that.</small><div class="btns" style="flex-wrap:wrap"><button type="button" class="sm" data-hm="a">Try A</button><button type="button" class="sm" data-hm="b">Try B</button><button type="button" class="sm" data-hm="c">Try C</button></div><label for="hapM">Method used for buttons</label><select id="hapM"><option value="a">A (default)</option><option value="b">B</option><option value="c">C</option></select><small class="hint">Pick the one that ticked.</small></details><small class="hint">Light taps when you press buttons. Works on iPhone with iOS 18 or later (with System Haptics on in Settings → Sounds &amp; Haptics) and on most Android phones.</small><small class="hint" id="hapD"></small>';
+var sel=document.getElementById('sTheme');var host=sel?sel.parentNode:b;if(host){host.insertAdjacentHTML('beforeend',h);var x=document.getElementById('hapT');x.onchange=function(){on=x.value==='1';try{localStorage.setItem(K,on?'1':'0')}catch(e){}tap()};var tb=document.getElementById('hapX'),dd=document.getElementById('hapD');if(dd)dd.textContent=diag();if(tb)tb.onclick=function(){tap(true);if(dd)dd.textContent='Sent a tap. '+diag()};
+[].forEach.call(document.querySelectorAll('[data-hm]'),function(bt){bt.onclick=function(){tap(true,bt.dataset.hm);if(dd)dd.textContent='Sent a tap with method '+bt.dataset.hm.toUpperCase()+'. '+diag()}});
+var hm=document.getElementById('hapM');if(hm){hm.value=meth;hm.onchange=function(){meth=hm.value;try{localStorage.setItem(MK,meth)}catch(e){}tap(true)}}}}}
 })();</script>
 <script>(function(){
 var rm=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches,pnl=document.getElementById('pnl');
