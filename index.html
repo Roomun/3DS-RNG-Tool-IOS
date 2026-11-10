@@ -2735,7 +2735,7 @@ if(!useSw)document.addEventListener('click',function(e){if(!e.isTrusted)return;v
 // the switch (haptic) and the click bubbles up to the button's own handlers; a summary is toggled here, since a click on a control
 // inside a summary doesn't open the details.
 if(useSw){
-var st=document.createElement('style');st.textContent='input[type=checkbox].hapSw{position:absolute!important;left:0!important;top:0!important;width:100%!important;height:100%!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;opacity:.02;z-index:3;cursor:pointer;-webkit-tap-highlight-color:transparent}html:not(.hapsw) .hapSw,button:disabled>.hapSw{display:none}';document.head.appendChild(st);
+var st=document.createElement('style');st.textContent='input[type=checkbox].hapSw{position:absolute!important;left:0!important;top:0!important;width:100%!important;height:100%!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;opacity:.02;z-index:3;cursor:pointer;touch-action:pan-x pan-y;-webkit-tap-highlight-color:transparent}html:not(.hapsw) .hapSw,button:disabled>.hapSw{display:none}';document.head.appendChild(st);
 // the switch must stay inside its button: a button whose own style keeps it position:static (the title) gets position:relative.
 // All styles are read first, then all switches added, so a long result list costs one style pass.
 var hasSw=function(el){for(var c=el.lastElementChild;c;c=c.previousElementSibling)if(c.classList.contains('hapSw'))return true;return false};
@@ -2747,6 +2747,15 @@ var collect=function(n,out){if(n.nodeType!==1||n.classList.contains('hapSw'))ret
 var first=[];collect(document.body,first);addAll(first);
 new MutationObserver(function(ms){var out=[];for(var k=0;k<ms.length;k++){var m=ms[k];for(var j=0;j<m.addedNodes.length;j++)collect(m.addedNodes[j],out);if(m.target.nodeType===1&&m.target.matches(SEL))out.push(m.target)}if(out.length)addAll(out)}).observe(document.body,{childList:true,subtree:true});
 document.addEventListener('click',function(e){var i=e.target;if(!i.classList||!i.classList.contains('hapSw'))return;var s=i.parentNode;if(s&&s.tagName==='SUMMARY'&&s.parentNode&&s.parentNode.tagName==='DETAILS')s.parentNode.open=!s.parentNode.open});
+// v58: a scroll that starts on a button must not press it. iOS lets a finger drag a switch, so a scroll starting on one ended in a
+// click and picked a Final Screen target. A click on a switch is dropped when the finger moved more than 10 px or anything scrolled
+// since the touch began.
+var tY=0,tX=0,moved=false,tEnd=0;
+window.addEventListener('touchstart',function(e){var t=e.touches[0];if(!t)return;tX=t.clientX;tY=t.clientY;moved=false},{passive:true,capture:true});
+window.addEventListener('touchmove',function(e){var t=e.touches[0];if(t&&Math.abs(t.clientX-tX)+Math.abs(t.clientY-tY)>10)moved=true},{passive:true,capture:true});
+window.addEventListener('touchend',function(){tEnd=Date.now()},{passive:true,capture:true});
+window.addEventListener('scroll',function(){moved=true},{passive:true,capture:true});
+window.addEventListener('click',function(e){var i=e.target;if(!i.classList||!i.classList.contains('hapSw'))return;if(moved&&Date.now()-tEnd<1000){e.stopPropagation();e.preventDefault()}},true);
 // the switches' own change/input events must not reach the form's listeners (autosave etc.)
 ['change','input'].forEach(function(t){window.addEventListener(t,function(e){if(e.target.classList&&e.target.classList.contains('hapSw'))e.stopPropagation()},true)});
 document.documentElement.classList.toggle('hapsw',on);
