@@ -57,7 +57,7 @@ const set = (p, id, v) => p.evaluate(([id, v]) => { const e = document.getElemen
   ok(/Frame 798/.test(out) && /−2/.test(out) && /set Delay to 14 \(now 16\)/.test(out), 'egg −2 found via menu button, delay advice 14');
   // wrong kind -> friendly message
   await set(p, 'game', '7'); await p.evaluate(() => openMiss(-1, 0)); await p.waitForTimeout(200);
-  ok(/works for Gen 6 eggs and hordes/.test(await p.evaluate(() => pBody.innerText)), 'Gen 7 shows explanation');
+  ok(/works for Gen 6 eggs, hordes and stationary\/gifts/.test(await p.evaluate(() => pBody.innerText)), 'Gen 7 shows explanation');
   // "Missed?" button on a real horde result card
   await set(p, 'game', '6'); await set(p, 'kind', 'horde'); await set(p, 'seed', '1A2B3C4D'); await set(p, 'from', '500'); await set(p, 'to', '600');
   await p.evaluate(() => run()); await p.waitForTimeout(800);

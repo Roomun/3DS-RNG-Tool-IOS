@@ -417,7 +417,7 @@ html{scroll-behavior:smooth}
 <div><label for="fAb">Ability</label><select id="fAb"></select></div>
 <div data-show="w7 o7 q7 p7"><label for="fSlot">Slot</label><select id="fSlot"></select></div>
 </div>
-<label>IV filter <small style="font-weight:400">(minimum, or tick Only 31 / Only 0)</small></label><div class="iv" id="minIVs"></div>
+<label>Minimum IVs <small style="font-weight:400">(shows everything at or above these; tick Only 31 / Only 0 for exact)</small></label><div class="iv" id="minIVs"></div><small class="hint">Filters find frames to aim for. To find out which frame you actually hit, use “Missed? Check what you got” on a result, or Check a miss in the menu: it matches exact IVs or stats. Gen 6 eggs, hordes and stationary/gifts.</small>
 </details>
 
 <div id="stepNav"><button type="button" class="sm" id="stepBack">← Back</button><button type="button" class="sm" id="stepNext">Next →</button></div>
@@ -1620,12 +1620,12 @@ function applyPoke() { const it = curPoke(); if (!it) return; $('sdelay').value 
 $('sver').onchange = () => { fillStat(false); applyPoke(); };
 $('scat').onchange = () => { fillSpoke(); applyPoke(); };
 $('spoke').onchange = applyPoke;
-async function runStat(msg) {
-  if ($('game').value !== '6') return msg('Stationary RNG is only built for Gen 6 so far. Switch Game to Gen 6.');
+// settings of the Gen 6 stationary search, shared with Check a miss: an error string or { seed, it, o, tsv, delay }
+function stat6Cfg() {
   const sd = $('seed').value.trim();
-  if (!/^[0-9a-fA-F]{1,8}$/.test(sd)) return msg('Enter the initial seed as up to 8 hex digits.');
+  if (!/^[0-9a-fA-F]{1,8}$/.test(sd)) return 'Enter the initial seed as up to 8 hex digits.';
   const seed = parseInt(sd, 16) >>> 0, it = curPoke();
-  if (!it) return msg('Pick a Pokémon.');
+  if (!it) return 'Pick a Pokémon.';
   const t = $('tsv').value.trim(), tsv0 = t === '' ? -1 : Math.max(-1, Math.min(4095, parseInt(t, 10) || 0));
   const num = (id, d, a, b) => { const v = parseInt($(id).value, 10); return Math.max(a, Math.min(b, isNaN(v) ? d : v)); };
   const ratio = it.gen > 0 ? (2 - 2 * it.gen) & 0xff : it.g;
@@ -1638,10 +1638,16 @@ async function runStat(msg) {
     for (let i = 0; i < tg - 1; i++) list.push(it.tr && gl[i] ? gl[i] : (rr ? '1' : '0'));
     Object.assign(o, { bank: { list }, bi3: !!it.i3, extra: (tg - 1) * 12, assume: false, gp: gpOf(rt), rnd: rr, piv: it.mys ? 5 : it.i3 ? 3 : 0 });
   }
+  return { seed, it, o, tsv: o.tsv, delay: $('scd').checked ? num('sdelay', 0, 0, 5000) : 0 };
+}
+async function runStat(msg) {
+  if ($('game').value !== '6') return msg('Stationary RNG is only built for Gen 6 so far. Switch Game to Gen 6.');
+  const cf = stat6Cfg(); if (typeof cf === 'string') return msg(cf);
+  const { seed, it, o, delay } = cf;
+  const num = (id, d, a, b) => { const v = parseInt($(id).value, 10); return Math.max(a, Math.min(b, isNaN(v) ? d : v)); };
   const f = { shiny: $('fShiny').checked, nature: +$('fNat').value, hp: +$('fHp').value, gender: +$('fGen').value, ability: +$('fAb').value, minIV: ivs('minIVs'), ex: ivx(), slot: 0, blinkOnly: false };
   if (f.shiny && o.tsv < 0) return msg('Enter your TSV to filter for shiny Pokémon.');
   const max = num('to', 1000, 0, 100000000), min = Math.min(max, num('from', 0, 0, 100000000));
-  const delay = $('scd').checked ? num('sdelay', 0, 0, 5000) : 0;
   const wx = await widen(hi => searchStat6(seed, o, f, min, hi, delay, 150), max, 8000000, 'frame', extOn(), min), res = wx.res;
   last = [];
   const parts = []; if (wx.note) parts.push(wx.note);
@@ -1657,7 +1663,8 @@ async function runStat(msg) {
       '<div>' + gs(e.gender) + ' · ' + NAT[e.nature] + (e.sync && !o.always && o.syncNat < 25 ? ' (Sync)' : '') + ' · Ability ' + ABN[e.ability] + ' · HP ' + HPT[e.hp] + '</div></div>' +
       (spr ? '<img class="spr" alt=""' + dim + ' src="data:image/png;base64,' + spr + '">' : '') + '</div>' +
       '<div class="stats">' + e.iv.map((v, i) => '<div class="' + ivc(v) + '"><small>' + STATS[i] + '</small>' + v + '</div>').join('') + '</div>' +
-      '<div class="meta">EC ' + hex8(e.ec) + ' · PID ' + hex8(e.pid) + ' · PSV ' + String(e.psv).padStart(4, '0') + '</div></div>';
+      '<div class="meta">EC ' + hex8(e.ec) + ' · PID ' + hex8(e.pid) + ' · PSV ' + String(e.psv).padStart(4, '0') + '</div>' +
+      '<div class="btns"><button class="sm mxb" type="button" data-f="' + e.frame + '">Missed? Check what you got</button></div></div>';
   }).join('');
   if (res.length) { document.querySelectorAll('details.sec').forEach(d => { d.open = false; }); $('out').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 }
@@ -2518,7 +2525,7 @@ pnl.onclick = e => { if (e.target === pnl) pnl.classList.remove('on'); };
       ['Filters', 'Zet shiny, nature, hidden power, geslacht, ability en minimum-IV\'s. Per IV kun je "0" of "31" aantikken. De zoekactie gaat automatisch door tot de eerste match; "Search further" zoekt verder.'],
       ['Delay en tijd', 'Delay is het aantal frames dat het spel extra verbruikt. De tijd naast een frame is de wachttijd vanaf je seed. Onder Settings kun je kiezen of tijden in minuten/uren of alleen in seconden staan.'],
       ['Horde routes', 'Kies bij Hordes je spel en route: je ziet de drie hordes daar met soort, level en hoe vaak elke verschijnt (60%, 35%, 5%). Tik op degene die je jaagt, zodat elke positie de juiste soort en geslachtsverhouding krijgt, ook bij gemengde hordes zoals Nidoran♂ met één Nidoran♀. De gegevens komen uit 3DS RNG Tool.'],
-      ['Check a miss', 'Gen 6-eieren en hordes: krijg je een andere Pokémon dan voorspeld, tik dan op “Missed? Check what you got” bij het resultaat (of Check a miss in het menu). Vul in wat je kreeg: nature, IV’s of stats, characteristic, ability. Elk frame rond je doel wordt opnieuw berekend met je instellingen en je ziet welk frame je echt raakte, bijvoorbeeld +3. Zit je elke keer evenveel ernaast, pas dan Delay aan zoals voorgesteld.'],
+      ['Check a miss', 'Gen 6-eieren, hordes en stationary/gifts: krijg je een andere Pokémon dan voorspeld, tik dan op “Missed? Check what you got” bij het resultaat (of Check a miss in het menu). Vul in wat je kreeg: nature, IV’s of stats, characteristic, ability. Elk frame rond je doel wordt opnieuw berekend met je instellingen en je ziet welk frame je echt raakte, bijvoorbeeld +3. Zit je elke keer evenveel ernaast, pas dan Delay aan zoals voorgesteld.'],
       ['Recent en Targets', 'Recent bewaart je laatste zoekopdrachten; tik er één aan om alle velden terug te zetten. Bij een resultaat zet je met de ster een doelframe vast; die staan onder Targets. Met Compare zet je twee resultaten naast elkaar.'],
       ['Wat niet kan', 'Een timeline met live geheugen van de 3DS (NTR) bestaat niet in een webpagina. Resultaten zijn niet vergeleken met de originele tool of op een echte 3DS getest; controleer bij twijfel het eerste frame in het spel.']],
     en: [['Getting started', 'Pick your game (Gen 6 or 7) and what you are hunting at the top. Enter your Trainer ID/SID (or pick a profile), enter the initial seed and tap Calculate. The page lists frames that match your filters.'],
@@ -2526,7 +2533,7 @@ pnl.onclick = e => { if (e.target === pnl) pnl.classList.remove('on'); };
       ['Filters', 'Set shiny, nature, hidden power, gender, ability and minimum IVs. Per IV you can tap "0" or "31". The search continues automatically to the first match; "Search further" keeps going.'],
       ['Delay and time', 'Delay is the number of extra frames the game consumes. The time next to a frame is the wait from your seed. In Settings you can choose minutes/hours or seconds only.'],
       ['Horde routes', 'For Hordes, pick your game and route: you see the three hordes there with species, level and how often each appears (60%, 35%, 5%). Tap the one you are hunting so each position gets the right species and gender ratio, including mixed hordes like Nidoran♂ with one Nidoran♀. The data comes from 3DS RNG Tool.'],
-      ['Check a miss', 'Gen 6 eggs and hordes: if you get a different Pokémon than predicted, tap “Missed? Check what you got” on the result (or Check a miss in the menu). Enter what you got: nature, IVs or stats, characteristic, ability. Every frame around your target is recalculated with your settings and you see which frame you really hit, for example +3. If you are off by the same amount every time, change Delay as suggested.'],
+      ['Check a miss', 'Gen 6 eggs, hordes and stationary/gifts: if you get a different Pokémon than predicted, tap “Missed? Check what you got” on the result (or Check a miss in the menu). Enter what you got: nature, IVs or stats, characteristic, ability. Every frame around your target is recalculated with your settings and you see which frame you really hit, for example +3. If you are off by the same amount every time, change Delay as suggested.'],
       ['Recent and Targets', 'Recent keeps your last searches; tap one to restore every field. Use the star on a result to pin a target frame; pinned ones live under Targets. Compare puts two results side by side.'],
       ['Limits', 'A live-memory timeline (NTR) is not possible in a web page. Results are not checked against the original tool or a real 3DS; if in doubt, verify the first frame in game.']]
   };
@@ -2577,7 +2584,7 @@ pnl.onclick = e => { if (e.target === pnl) pnl.classList.remove('on'); };
 
   // ---- Result tools
   const cardKey = c => { const t = c.dataset.txt || ''; const ec = (t.match(/EC [0-9A-F]{8}/) || [''])[0], fr = (t.match(/Frame \d+/) || [''])[0]; return ($('seed').value || '') + '|' + $('kind').value + '|' + fr + '|' + ec + '|' + t.split('\n')[0]; };
-  function cardText(c) { const cl = c.cloneNode(true); cl.querySelectorAll('.ctl,img').forEach(x => x.remove()); return cl.innerText.replace(/\n{2,}/g, '\n').trim(); }
+  function cardText(c) { const cl = c.cloneNode(true); cl.querySelectorAll('.ctl,img,.mxb').forEach(x => x.remove()); return cl.innerText.replace(/\n{2,}/g, '\n').trim(); }
   function oneLine(t) { return t.split('\n').join(' ').replace(/\s+\|\s+/g, ' | ').replace(/ HP (\d+) Atk/, ' HP $1 Atk'); }
   let cmp = [];
   function decorate(c) {
@@ -2585,18 +2592,22 @@ pnl.onclick = e => { if (e.target === pnl) pnl.classList.remove('on'); };
     c.dataset.txt = cardText(c);
     const T = ld(T_KEY, []), key = cardKey(c), isT = T.some(t => t.k === key);
     const bar = document.createElement('div'); bar.className = 'ctl';
-    bar.innerHTML = '<button type="button" class="cc">Copy</button><button type="button" class="ct">' + (isT ? '★ Target' : '☆ Target') + '</button><button type="button" class="cm">Compare</button>';
+    bar.innerHTML = '<button type="button" class="cc">Copy</button><button type="button" class="ct' + (isT ? ' on' : '') + '" aria-pressed="' + isT + '">' + (isT ? '★ Target' : '☆ Target') + '</button><button type="button" class="cm">Compare</button>';
     c.appendChild(bar);
-    bar.querySelector('.cc').onclick = e => { const txt = c.dataset.txt + '\n' + labelNow(); const done = () => { e.target.textContent = 'Copied'; setTimeout(() => { e.target.textContent = 'Copy'; }, 1200); };
+    // use the buttons themselves, not e.target: on iPhone the tap lands on the haptic switch inside the button (v59 fix)
+    const bCopy = bar.querySelector('.cc'), bTgt = bar.querySelector('.ct'), bCmp = bar.querySelector('.cm');
+    const setTxt = (b, t) => { const sw = b.querySelector('.hapSw'); b.textContent = t; if (sw) b.appendChild(sw); };
+    bCopy.onclick = () => { const txt = c.dataset.txt + '\n' + labelNow(); const done = () => { setTxt(bCopy, 'Copied'); setTimeout(() => { setTxt(bCopy, 'Copy'); }, 1200); };
       try { navigator.clipboard.writeText(txt).then(done, () => fallbackCopy(txt, done)); } catch (er) { fallbackCopy(txt, done); } };
-    bar.querySelector('.ct').onclick = e => { let T2 = ld(T_KEY, []); const k = cardKey(c), i = T2.findIndex(t => t.k === k);
-      if (i >= 0) { T2.splice(i, 1); e.target.textContent = '☆ Target'; } else { T2.unshift({ k, l: labelNow(), x: c.dataset.txt, t: Date.now() }); T2 = T2.slice(0, 40); e.target.textContent = '★ Target'; }
+    bTgt.onclick = () => { let T2 = ld(T_KEY, []); const k = cardKey(c), i = T2.findIndex(t => t.k === k), now = i < 0;
+      if (!now) T2.splice(i, 1); else { T2.unshift({ k, l: labelNow(), x: c.dataset.txt, t: Date.now() }); T2 = T2.slice(0, 40); }
+      setTxt(bTgt, now ? '★ Target' : '☆ Target'); bTgt.classList.toggle('on', now); bTgt.setAttribute('aria-pressed', String(now));
       sv(T_KEY, T2); };
-    bar.querySelector('.cm').onclick = e => {
+    bCmp.onclick = () => {
       const k = cardKey(c); const i = cmp.findIndex(x => x.k === k);
-      if (i >= 0) { cmp.splice(i, 1); e.target.classList.remove('on'); return; }
-      cmp.push({ k, x: c.dataset.txt }); e.target.classList.add('on');
-      if (cmp.length > 2) { cmp.shift(); document.querySelectorAll('#out .cm.on').forEach(b => { if (b !== e.target && cmp.every(x => cardKey(b.closest('.card')) !== x.k)) b.classList.remove('on'); }); }
+      if (i >= 0) { cmp.splice(i, 1); bCmp.classList.remove('on'); return; }
+      cmp.push({ k, x: c.dataset.txt }); bCmp.classList.add('on');
+      if (cmp.length > 2) { cmp.shift(); document.querySelectorAll('#out .cm.on').forEach(b => { if (b !== bCmp && cmp.every(x => cardKey(b.closest('.card')) !== x.k)) b.classList.remove('on'); }); }
       if (cmp.length === 2) showCompare();
     };
   }
@@ -2801,7 +2812,7 @@ fb.onclick=function(e){var t=Date.now();if(t-lastT<120)return;lastT=t;if(state==
 document.addEventListener('click',function(e){if(!e.isTrusted)return;if(state==='open'&&!e.target.closest('#fabm,#toolFab,#hapL'))close()},true);
 })();</script>
 <script>
-// ---- Check a miss (Gen 6 eggs and hordes): which frame did the Pokémon you got come from? ----
+// ---- Check a miss (Gen 6 eggs, hordes, stationary/gifts): which frame did the Pokémon you got come from? ----
 (function () {
   const CHR = ['Loves to eat', 'Takes plenty of siestas', 'Nods off a lot', 'Scatters things often', 'Likes to relax',
     'Proud of its power', 'Likes to thrash about', 'A little quick tempered', 'Likes to fight', 'Quick tempered',
@@ -2824,7 +2835,8 @@ document.addEventListener('click',function(e){if(!e.isTrusted)return;if(state===
   // current settings, built the same way as the searches (run0 and runHorde6)
   function cfg() {
     const kd = $('kind').value;
-    if ($('game').value !== '6' || (kd !== 'egg' && kd !== 'horde')) return 'This check works for Gen 6 eggs and hordes. Pick Gen 6 and Eggs or Hordes first, with the same settings you used.';
+    if ($('game').value !== '6' || (kd !== 'egg' && kd !== 'horde' && kd !== 'stat')) return 'This check works for Gen 6 eggs, hordes and stationary/gifts. Pick Gen 6 and one of those first, with the same settings you used.';
+    if (kd === 'stat') { const sc = stat6Cfg(); if (typeof sc === 'string') return sc; return { kind: 'stat', seed: sc.seed, o: sc.o, it: sc.it, tsv: sc.tsv, delay: sc.delay, species: sc.it.s }; }
     const sd = $('seed').value.trim(); if (!/^[0-9a-fA-F]{1,8}$/.test(sd)) return 'Enter your initial seed first (the same one you searched with).';
     const seed = parseInt(sd, 16) >>> 0;
     const t = $('tsv').value.trim(), tsv = t === '' ? -1 : Math.max(-1, Math.min(4095, parseInt(t, 10) || 0));
@@ -2847,13 +2859,20 @@ document.addEventListener('click',function(e){if(!e.isTrusted)return;if(state===
   function cands(c, lo, hi) {
     const m = new MT(); m.seed(c.seed);
     for (let i = 0; i < lo; i++) m.next();
-    const span = hi - lo + 1, buf = new Uint32Array(span + c.delay + 260);
+    const span = hi - lo + 1, buf = new Uint32Array(span + c.delay + 260 + ((c.o && c.o.extra) || 0));
     for (let i = 0; i < buf.length; i++) buf[i] = m.next();
     const out = [];
     const syncs = c.kind === 'horde' && c.o.syncNat < 25 ? [c.o.assume, !c.o.assume] : [c.kind === 'horde' ? c.o.assume : false];
     const has = c.kind === 'horde' ? [c.o.ha].concat([0, 1, 2, 3, 4, 5].filter(x => x !== c.o.ha)) : [0];
     for (let i = 0; i < span; i++) {
       const b = i + c.delay + 1;
+      if (c.kind === 'stat') {
+        // Synchronize: a gift always uses the lead's nature when one is set; a wild encounter only when it triggers. Try the other case too.
+        const variants = [c.o];
+        if (c.o.syncNat < 25 && !(c.it && c.it.nat < 25)) variants.push(c.o.always ? Object.assign({}, c.o, { syncNat: 255, _n: 'Synchronize didn’t apply' }) : Object.assign({}, c.o, { assume: !c.o.assume, _n: c.o.assume ? 'Synchronize did not trigger' : 'Synchronize triggered' }));
+        for (const v of variants) { const e = genStat6(buf, b, v); e.frame = lo + i; e.notes = v._n ? [v._n] : []; out.push(e); }
+        continue;
+      }
       if (c.kind === 'egg') {
         const e = c.o.main ? genEgg6(c.o, [buf[b + 1], buf[b + 2]], buf[b]) : genEgg6(c.o, [buf[b], buf[b + 1]], null);
         e.frame = lo + i; e.notes = []; out.push(e);
@@ -2889,7 +2908,7 @@ document.addEventListener('click',function(e){if(!e.isTrusted)return;if(state===
     kindNow = c.kind;
     const opt = (v, t) => '<option value="' + v + '">' + esc(t) + '</option>';
     const dk = opt(-1, 'Don’t know');
-    openP('<h2>Check a miss</h2><p class="d" style="margin:0 0 8px;font-size:.85rem">Got a different ' + (c.kind === 'egg' ? 'egg' : 'horde') + ' than predicted? Enter what you got. Every frame around your target is recalculated with your current settings, and the ones that give exactly this Pokémon are shown with how far off you were.</p>' +
+    openP('<h2>Check a miss</h2><p class="d" style="margin:0 0 8px;font-size:.85rem">Got a different ' + (c.kind === 'egg' ? 'egg' : c.kind === 'horde' ? 'horde' : esc(spName(c.species))) + ' than predicted? Enter what you got. Every frame around your target is recalculated with your current settings, and the ones that give exactly this Pokémon are shown with how far off you were.</p>' +
       '<div class="row"><div><label for="mxT">Target frame</label><input id="mxT" inputmode="numeric" autocomplete="off" value="' + (frame >= 0 ? frame : esc($('from').value)) + '"></div><div><label for="mxW">Search ± frames</label><input id="mxW" inputmode="numeric" autocomplete="off" value="300"></div></div>' +
       (c.kind === 'horde' ? '<label for="mxP">Which one of the five</label><select id="mxP"><option value="0">Don’t know</option>' + [1, 2, 3, 4, 5].map(i => opt(i, 'Position ' + i)).join('') + '</select><small class="hint">Position as the app numbers them (1 to 5). Pick “Don’t know” if unsure.</small>' : '') +
       '<label for="mxN">Nature</label><select id="mxN">' + dk + NAT.map((n, i) => opt(i, n)).join('') + '</select>' +
@@ -2901,6 +2920,7 @@ document.addEventListener('click',function(e){if(!e.isTrusted)return;if(state===
       '<details id="mxSt"><summary>Or enter its stats</summary><small class="hint">Use the stats on the Summary screen of a freshly caught or hatched Pokémon (no EVs, no Power items). Pick the species and nature above. A level 1 hatchling tells very little; hordes or a few Rare Candies help.</small><label for="mxL">Level</label><input id="mxL" inputmode="numeric" autocomplete="off"><div class="iv">' + STATS.map(s => '<span>' + s + '</span>').join('') + STATS.map((s, i) => '<input data-i="' + i + '" inputmode="numeric" autocomplete="off" aria-label="' + s + ' stat">').join('') + '</div></details>' +
       '<button class="go" id="mxGo" type="button" style="margin-top:10px">Find the frame</button><div id="mxOut"></div>');
     if (c.kind === 'horde' && pos) $('mxP').value = String(pos);
+    if (c.kind === 'stat' && c.species && DEX6.n[c.species - 1]) $('mxS').value = spName(c.species);
     const hsp = c.o.species; // species of the picked horde: fill it in when it is known
     if (hsp) { const pre = () => { const pp = +$('mxP').value, one = new Set(hsp).size === 1; if (pp || one) $('mxS').value = spName(hsp[(pp || 1) - 1]); };
       pre(); $('mxP').addEventListener('change', () => { pre(); $('mxS').dispatchEvent(new Event('input')); }); }
@@ -2959,11 +2979,11 @@ document.addEventListener('click',function(e){if(!e.isTrusted)return;if(state===
       if (!best.e.notes.length && best.d === 0) h += '<p class="d" style="font-size:.85rem">The closest match is your target frame itself with your settings. ' + (n > 1 ? 'If another one is the real one, add details to tell them apart.' : 'Then the frame was right; check the details you entered here.') + '</p>';
       else {
         if (best.d !== 0) h += '<p class="d" style="font-size:.85rem">Closest: you were ' + Math.abs(best.d) + ' frame' + (Math.abs(best.d) === 1 ? '' : 's') + ' ' + (best.d > 0 ? 'late' : 'early') + ' (about ' + (Math.abs(best.d) / 60).toFixed(2) + ' s). If you are off by the same amount every time, set Delay to ' + Math.max(0, dl + best.d) + ' (now ' + dl + ') and search again. If it changes each time, it is your timing.</p>';
-        if (best.e.notes.length) h += '<p class="d" style="font-size:.85rem;color:var(--warn)">This match needs: ' + esc(best.e.notes.join(', ')) + '. That part isn’t random-frame timing; ' + (c.kind === 'horde' ? 'the Synchronize check and the Hidden Ability slot come from a second RNG this app can’t see. Hordes with a Hidden Ability shift the Pokémon after it.' : '') + '</p>';
+        if (best.e.notes.length) h += '<p class="d" style="font-size:.85rem;color:var(--warn)">This match needs: ' + esc(best.e.notes.join(', ')) + '. That part isn’t random-frame timing; ' + (c.kind === 'horde' ? 'the Synchronize check and the Hidden Ability slot come from a second RNG this app can’t see. Hordes with a Hidden Ability shift the Pokémon after it.' : c.kind === 'stat' ? 'whether Synchronize applies comes from a second RNG this app can’t see (or the lead wasn’t a Synchronize Pokémon).' : '') + '</p>';
       }
       h += exact.slice(0, 10).map(card).join('') + (n > 10 ? '<p class="d" style="font-size:.8rem">Showing the 10 closest of ' + n + '.</p>' : '');
     } else {
-      h += '<p style="font-size:.9rem;margin:10px 0 4px"><b>No frame within ±' + W + ' gives exactly this Pokémon.</b></p><p class="d" style="font-size:.85rem">Check the seed and the other settings (' + (c.kind === 'egg' ? 'parents’ IVs, items, ability, gender ratio, Shiny Charm/Masuda, accept or reject' : 'gender ratio, Synchronize nature, Shiny Charm') + '), any IVs you typed, or search wider. The nearest ones:</p>' + near.map(card).join('');
+      h += '<p style="font-size:.9rem;margin:10px 0 4px"><b>No frame within ±' + W + ' gives exactly this Pokémon.</b></p><p class="d" style="font-size:.85rem">Check the seed and the other settings (' + (c.kind === 'egg' ? 'parents’ IVs, items, ability, gender ratio, Shiny Charm/Masuda, accept or reject' : c.kind === 'stat' ? 'the Pokémon picked, delay, Synchronize nature, Shiny Charm' : 'gender ratio, Synchronize nature, Shiny Charm') + '), any IVs you typed, or search wider. The nearest ones:</p>' + near.map(card).join('');
     }
     out.innerHTML = h;
   }
